@@ -301,14 +301,18 @@ configure_system_integration() {
     
     local script_path="/usr/local/bin/telegram_notif/telegram_connection_notif.sh"
     
-    # Configuration bash.bashrc pour les connexions SSH
+    # Configuration bash.bashrc pour toutes les connexions interactives
     if ! grep -q "telegram_connection_notif" /etc/bash.bashrc; then
         cat >> /etc/bash.bashrc << 'EOF'
 
-# Notification Telegram pour connexions SSH
-if [ -n "$PS1" ] && [ "$TERM" != "unknown" ] && [ -z "$PAM_TYPE" ]; then
-    if [ -r "/etc/telegram/credentials.cfg" ] && [ -r "/etc/telegram/telegram_notif.cfg" ]; then
-        nohup /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background >/dev/null 2>&1 &
+# Notification Telegram pour connexions
+if [ -n "$PS1" ] && [ "$TERM" != "unknown" ]; then
+    # Vérifier si c'est une nouvelle session (pas un sous-shell)
+    if [ -z "$TELEGRAM_NOTIF_SENT" ]; then
+        export TELEGRAM_NOTIF_SENT=1
+        if [ -r "/etc/telegram/credentials.cfg" ] && [ -r "/etc/telegram/telegram_notif.cfg" ]; then
+            nohup /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background >/dev/null 2>&1 &
+        fi
     fi
 fi
 EOF
@@ -317,15 +321,29 @@ EOF
         log_message "INFO" "Configuration bash.bashrc déjà présente"
     fi
     
-    # Configuration PAM pour les commandes su/sudo
+    # Configuration PAM SSH pour toutes les connexions SSH
+    local pam_ssh_file="/etc/pam.d/sshd"
+    if [ -f "$pam_ssh_file" ]; then
+        if ! grep -q "telegram_connection_notif" "$pam_ssh_file"; then
+            # Ajouter la configuration SSH
+            echo "session optional pam_exec.so /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background" >> "$pam_ssh_file"
+            log_message "SUCCESS" "Configuration PAM SSH ajoutée"
+        else
+            log_message "INFO" "Configuration PAM SSH déjà présente"
+        fi
+    else
+        log_message "WARNING" "Fichier PAM SSH non trouvé"
+    fi
+    
+    # Configuration PAM pour les commandes su/sudo (version corrigée)
     local pam_file="/etc/pam.d/su"
     if [ -f "$pam_file" ]; then
         # Nettoyer les anciennes configurations
-        sed -i '/telegram/d' "$pam_file"
+        sed -i '/telegram_connection_notif/d' "$pam_file"
         
-        # Ajouter la nouvelle configuration
-        echo "session optional pam_exec.so seteuid /bin/bash -c 'nohup /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background >/dev/null 2>&1 &'" >> "$pam_file"
-        log_message "SUCCESS" "Configuration PAM ajoutée"
+        # Ajouter la nouvelle configuration (version simplifiée)
+        echo "session optional pam_exec.so /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background" >> "$pam_file"
+        log_message "SUCCESS" "Configuration PAM su ajoutée"
     else
         log_message "WARNING" "Fichier PAM su non trouvé, configuration manuelle nécessaire"
     fi
@@ -335,11 +353,11 @@ EOF
 final_test() {
     log_message "INFO" "Test final du système..."
     
-    # Test d'exécution du script
-    if /usr/local/bin/telegram_notif/telegram_connection_notif.sh --test; then
-        log_message "SUCCESS" "Test d'exécution réussi"
+    # Vérification que le script existe et est exécutable
+    if [ -x "/usr/local/bin/telegram_notif/telegram_connection_notif.sh" ]; then
+        log_message "SUCCESS" "Script installé et exécutable"
     else
-        log_message "WARNING" "Test d'exécution échoué, vérifiez la configuration"
+        log_message "WARNING" "Problème avec l'installation du script"
     fi
     
     # Envoi d'une notification de test

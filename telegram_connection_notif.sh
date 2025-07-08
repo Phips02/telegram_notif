@@ -31,14 +31,10 @@ if [ "$1" = "--version" ]; then
     exit 0
 fi
 BACKGROUND=false
-TEST_MODE=false
 for arg in "$@"; do
     case $arg in
         --background)
             BACKGROUND=true
-            ;;
-        --test)
-            TEST_MODE=true
             ;;
         *)
             # Argument inconnu
@@ -46,19 +42,17 @@ for arg in "$@"; do
     esac
 done
 
-# Exécution en arrière-plan pour éviter le lag de connexion (sauf en mode test)
-if [ "$BACKGROUND" = "false" ] && [ "$TEST_MODE" = "false" ]; then
+# Exécution en arrière-plan pour éviter le lag de connexion
+if [ "$BACKGROUND" = "false" ]; then
     # Lancer le script en arrière-plan et se détacher immédiatement
     nohup "$0" --background </dev/null >/dev/null 2>&1 &
     # Retourner immédiatement pour ne pas bloquer la connexion
     exit 0
 fi
 
-# À partir d'ici, le script s'exécute en arrière-plan ou en mode test
-if [ "$TEST_MODE" = "false" ]; then
-    # Petite pause pour laisser la connexion se stabiliser
-    sleep 1
-fi
+# À partir d'ici, le script s'exécute en arrière-plan
+# Petite pause pour laisser la connexion se stabiliser
+sleep 1
 
 # Fonction simplifiée pour charger la configuration
 safe_source() {
@@ -168,59 +162,90 @@ collect_info() {
         IP_SOURCE="Système"
     fi
     
-    # Parallélisation des opérations pour optimiser les performances
-    {
-        # IP locale (simple et rapide)
-        IP_LOCAL=$(hostname -I 2>/dev/null | awk '{print $1}') || IP_LOCAL="N/A" &
-        
-        # Informations publiques (avec option de désactivation)
-        if [ "$SKIP_PUBLIC_IP" = "true" ]; then
-            IP_PUBLIC="Désactivé"
-        elif command -v curl >/dev/null 2>&1; then
-            # Timeout réduit à 2 secondes pour éviter les lags
-            IP_PUBLIC=$(timeout 2 curl -s --max-time 2 ipinfo.io/ip 2>/dev/null) || IP_PUBLIC="N/A" &
-        else
-            IP_PUBLIC="N/A"
-        fi
-        
-        # Informations rapides (commandes locales)
-        ACTIVE_SESSIONS=$(who | wc -l 2>/dev/null) || ACTIVE_SESSIONS="N/A" &
-        TERMINAL_INFO=$(tty 2>/dev/null) || TERMINAL_INFO="N/A" &
-        
-        # Attendre que toutes les opérations en arrière-plan se terminent
-        wait
-    } 2>/dev/null
+    # Collecte des informations système de manière optimisée
+    # IP locale (simple et rapide)
+    IP_LOCAL=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -z "$IP_LOCAL" ] && IP_LOCAL="N/A"
+    
+    # Informations publiques (avec option de désactivation)
+    if [ "$SKIP_PUBLIC_IP" = "true" ]; then
+        IP_PUBLIC="Désactivé"
+    elif command -v curl >/dev/null 2>&1; then
+        # Timeout réduit à 3 secondes pour éviter les lags
+        IP_PUBLIC=$(timeout 3 curl -s --max-time 3 ipinfo.io/ip 2>/dev/null)
+        [ -z "$IP_PUBLIC" ] && IP_PUBLIC="N/A"
+    else
+        IP_PUBLIC="N/A"
+    fi
+    
+    # Informations de sessions détaillées depuis who
+    WHO_OUTPUT=$(who 2>/dev/null)
+    TOTAL_SESSIONS=$(echo "$WHO_OUTPUT" | grep -v '^$' | wc -l 2>/dev/null)
+    [ -z "$TOTAL_SESSIONS" ] && TOTAL_SESSIONS="0"
+    
+    # Sessions SSH avec détails
+    SSH_SESSIONS=$(echo "$WHO_OUTPUT" | grep -c "pts/" 2>/dev/null)
+    [ -z "$SSH_SESSIONS" ] && SSH_SESSIONS="0"
+    
+    # Sessions console avec détails
+    CONSOLE_SESSIONS=$(echo "$WHO_OUTPUT" | grep -c "tty" 2>/dev/null)
+    [ -z "$CONSOLE_SESSIONS" ] && CONSOLE_SESSIONS="0"
+    
+    # Détail des sessions actives (limité à 5 pour éviter un message trop long)
+    SESSIONS_DETAIL=""
+    if [ "$TOTAL_SESSIONS" -gt 0 ] && [ "$TOTAL_SESSIONS" -le 5 ]; then
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                # Extraire les informations de chaque ligne
+                user=$(echo "$line" | awk '{print $1}')
+                terminal=$(echo "$line" | awk '{print $2}')
+                time=$(echo "$line" | awk '{print $3, $4}')
+                ip=$(echo "$line" | grep -o '([^)]*)' | tr -d '()')
+                
+                if [[ "$terminal" == pts/* ]]; then
+                    type_conn="SSH"
+                    if [ -n "$ip" ]; then
+                        SESSIONS_DETAIL="${SESSIONS_DETAIL}• $type_conn ($terminal) depuis $ip à $time %0A"
+                    else
+                        SESSIONS_DETAIL="${SESSIONS_DETAIL}• $type_conn ($terminal) à $time %0A"
+                    fi
+                elif [[ "$terminal" == tty* ]]; then
+                    type_conn="Console"
+                    SESSIONS_DETAIL="${SESSIONS_DETAIL}• $type_conn ($terminal) à $time %0A"
+                else
+                    SESSIONS_DETAIL="${SESSIONS_DETAIL}• Autre ($terminal) à $time %0A"
+                fi
+            fi
+        done <<< "$WHO_OUTPUT"
+    elif [ "$TOTAL_SESSIONS" -gt 5 ]; then
+        SESSIONS_DETAIL="• Trop de sessions pour affichage détaillé ($TOTAL_SESSIONS) %0A"
+    fi
+    
+    TERMINAL_INFO=$(tty 2>/dev/null)
+    [ -z "$TERMINAL_INFO" ] && TERMINAL_INFO="N/A"
     
 
 }
-
-# Mode test : afficher les informations et sortir
-if [ "$TEST_MODE" = "true" ]; then
-    echo "Mode test activé - Vérification de la configuration..."
-    echo "Identifiants Telegram : OK"
-    echo "Configuration spécifique : OK"
-    echo "Fonctions Telegram : OK"
-    echo "Dépendances (curl) : OK"
-    echo "Test réussi !"
-    exit 0
-fi
 
 # Collecter les informations
 collect_info
 
 # Construction du message avec séparations
 TEXT="🔔 *Connexion $CONNECTION_TYPE* %0A\
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ %0A\
 📅 $DATE %0A\
+─────────────────────────── %0A\
+Connexion sur la machine : %0A\
 👤 Utilisateur: $USER_INFO %0A\
 💻 Hôte: $HOST_INFO %0A\
-📺 Terminal: $TERMINAL_INFO %0A\
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ %0A\
-🌐 IP Locale: $IP_LOCAL %0A\
-📍 IP Source: $IP_SOURCE %0A\
+🏠 $IP_LOCAL %0A\
+─────────────────────────── %0A\
+Connexion depuis : %0A\
+📡 IP Client: $IP_SOURCE %0A\
 🌍 IP Publique: $IP_PUBLIC %0A\
-👥 Sessions actives: $ACTIVE_SESSIONS %0A\
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+👥 Sessions actives: %0A\
+$SESSIONS_DETAIL
+─────────────────────────── %0A\
+📺 Terminal: $TERMINAL_INFO"
 
 # Envoi du message
 if ! telegram_text_send "$TEXT"; then
