@@ -177,14 +177,24 @@ parse_last_line() {
         local host="${BASH_REMATCH[3]}"
         local rest="${BASH_REMATCH[4]}"
         
-        # Extraire la partie date (avant "still logged in" ou " - ")
+        # Extraire la partie date et déterminer le type de connexion
         local datetime
-        if [[ "$rest" =~ ^(.+)[[:space:]]+-[[:space:]]+.* ]]; then
-            # Connexion terminée avec durée : extraire la date de début
+        local is_active=false
+        
+        if [[ "$rest" =~ ^(.+)[[:space:]]+still[[:space:]]+logged[[:space:]]+in ]]; then
+            # Connexion active : traiter
             datetime="${BASH_REMATCH[1]}"
-        elif [[ "$rest" =~ ^(.+)[[:space:]]+still[[:space:]]+logged[[:space:]]+in ]]; then
-            # Connexion active : extraire la date
+            is_active=true
+        elif [[ "$rest" =~ ^(.+)[[:space:]]+-[[:space:]]+.* ]]; then
+            # Connexion terminée : vérifier si elle est très récente (moins de 2 minutes)
             datetime="${BASH_REMATCH[1]}"
+            local current_time=$(date +%s)
+            local connection_time=$(date -d "$datetime" +%s 2>/dev/null || echo 0)
+            
+            # Ignorer les connexions terminées depuis plus de 2 minutes
+            if [ $((current_time - connection_time)) -gt 120 ]; then
+                return 1
+            fi
         else
             # Fallback : prendre tout sauf les parenthèses finales
             datetime=$(echo "$rest" | sed -E 's/[[:space:]]+\([^)]+\)[[:space:]]*$//' | xargs)
@@ -199,6 +209,7 @@ parse_last_line() {
         export PARSED_TERMINAL="$terminal"
         export PARSED_HOST="$host"
         export PARSED_DATETIME="$datetime"
+        export PARSED_IS_ACTIVE="$is_active"
         
         return 0
     fi
@@ -244,6 +255,9 @@ create_notification_message() {
     local host="$3"
     local datetime="$4"
     
+    # Utiliser la variable globale pour déterminer si la connexion est active
+    local is_active="${PARSED_IS_ACTIVE:-true}"
+    
     # Déterminer le type de connexion avec détection améliorée
     local connection_type="Inconnue"
     local connection_icon="🔔"
@@ -273,8 +287,16 @@ create_notification_message() {
     # Compter les sessions actives
     local active_sessions=$(who | wc -l)
     
+    # Déterminer le titre du message selon le statut
+    local message_title
+    if [ "$is_active" = "true" ]; then
+        message_title="*Nouvelle connexion $connection_type*"
+    else
+        message_title="*Connexion $connection_type récente*"
+    fi
+    
     # Construire le message
-    local message="$connection_icon *Nouvelle connexion $connection_type*
+    local message="$connection_icon $message_title
 
 📅 $datetime
 ───────────────────────────
