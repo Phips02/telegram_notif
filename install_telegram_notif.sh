@@ -122,7 +122,23 @@ get_telegram_credentials() {
         read -p "Voulez-vous le remplacer ? (y/N): " replace_creds
         if [[ ! "$replace_creds" =~ ^[Yy]$ ]]; then
             log_message "INFO" "Conservation des identifiants existants"
-            return 0
+            # Charger les identifiants existants
+            source "/etc/telegram/credentials.cfg"
+            
+            # Vérifier si les variables sont bien chargées
+            if [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ]; then
+                log_message "SUCCESS" "Identifiants existants chargés avec succès"
+                
+                # Vérifier si le fichier a le bon format (avec export)
+                if ! grep -q "export BOT_TOKEN CHAT_ID" "/etc/telegram/credentials.cfg"; then
+                    log_message "INFO" "Mise à jour du format du fichier credentials.cfg"
+                    # Marquer pour mise à jour du format
+                    UPDATE_CREDENTIALS_FORMAT=true
+                fi
+                return 0
+            else
+                log_message "WARNING" "Fichier d'identifiants corrompu, reconfiguration nécessaire"
+            fi
         fi
     fi
     
@@ -222,7 +238,16 @@ create_config_files() {
     log_message "INFO" "Création des fichiers de configuration..."
     
     # 1. Fichier des identifiants Telegram (partagé)
-    cat > "/etc/telegram/credentials.cfg" << EOF
+    # Vérifier si le fichier existe déjà avec des identifiants valides
+    if [ -f "/etc/telegram/credentials.cfg" ] && [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ] && [ "$UPDATE_CREDENTIALS_FORMAT" != "true" ]; then
+        log_message "INFO" "Fichier credentials.cfg existant conservé"
+    else
+        if [ "$UPDATE_CREDENTIALS_FORMAT" = "true" ]; then
+            log_message "INFO" "Mise à jour du format du fichier credentials.cfg"
+        else
+            log_message "INFO" "Création du fichier credentials.cfg"
+        fi
+        cat > "/etc/telegram/credentials.cfg" << EOF
 ###############################################################################
 # Identifiants Telegram partagés
 # Fichier: /etc/telegram/credentials.cfg
@@ -235,6 +260,7 @@ CHAT_ID="$CHAT_ID"
 # Export des variables pour compatibilité
 export BOT_TOKEN CHAT_ID
 EOF
+    fi
     
     # 2. Fichier de configuration spécifique
     cat > "/etc/telegram/telegram_notif.cfg" << EOF
