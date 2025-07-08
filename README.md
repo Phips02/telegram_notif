@@ -95,11 +95,11 @@ Le script d'installation vous demandera vos identifiants Telegram et créera aut
 **1. Identifiants Telegram :** `/etc/telegram/credentials.cfg`
 ```bash
 # Identifiants Telegram partagés
-TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN_HERE"
-TELEGRAM_CHAT_ID="YOUR_CHAT_ID_HERE"
+BOT_TOKEN="YOUR_BOT_TOKEN_HERE"
+CHAT_ID="YOUR_CHAT_ID_HERE"
 
 # Export des variables pour compatibilité
-export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+export BOT_TOKEN CHAT_ID
 ```
 
 **2. Configuration spécifique :** `/etc/telegram/telegram_notif.cfg`

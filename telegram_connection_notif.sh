@@ -95,8 +95,8 @@ else
 fi
 
 # Vérification des variables essentielles
-if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-    log_error "TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID non défini"
+if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+    log_error "BOT_TOKEN ou CHAT_ID non défini"
     exit 1
 fi
 

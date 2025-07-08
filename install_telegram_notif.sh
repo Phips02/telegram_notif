@@ -138,8 +138,8 @@ get_telegram_credentials() {
     
     # Demander le token du bot
     while true; do
-        read -p "Token du bot Telegram: " TELEGRAM_BOT_TOKEN
-        if [[ "$TELEGRAM_BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]]; then
+        read -p "Token du bot Telegram: " BOT_TOKEN
+        if [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]]; then
             break
         else
             log_message "ERROR" "Format de token invalide. Format attendu: 123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
@@ -148,8 +148,8 @@ get_telegram_credentials() {
     
     # Demander le Chat ID
     while true; do
-        read -p "Chat ID Telegram: " TELEGRAM_CHAT_ID
-        if [[ "$TELEGRAM_CHAT_ID" =~ ^-?[0-9]+$ ]]; then
+        read -p "Chat ID Telegram: " CHAT_ID
+        if [[ "$CHAT_ID" =~ ^-?[0-9]+$ ]]; then
             break
         else
             log_message "ERROR" "Format de Chat ID invalide. Doit être un nombre (ex: 123456789 ou -123456789)"
@@ -159,8 +159,8 @@ get_telegram_credentials() {
     # Test de la configuration
     log_message "INFO" "Test de la configuration Telegram..."
     local test_message="🔧 Test d'installation Telegram Notif V$TELEGRAM_VERSION"
-    local response=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-        -d "chat_id=$TELEGRAM_CHAT_ID" \
+    local response=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+        -d "chat_id=$CHAT_ID" \
         -d "text=$test_message")
     
     if echo "$response" | grep -q '"ok":true'; then
@@ -229,11 +229,11 @@ create_config_files() {
 ###############################################################################
 
 # Identifiants Telegram (OBLIGATOIRE)
-TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
-TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID"
+BOT_TOKEN="$BOT_TOKEN"
+CHAT_ID="$CHAT_ID"
 
 # Export des variables pour compatibilité
-export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+export BOT_TOKEN CHAT_ID
 EOF
     
     # 2. Fichier de configuration spécifique
@@ -333,8 +333,8 @@ final_test() {
 
 🚀 Le système est maintenant opérationnel !"
 
-    curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-        -d "chat_id=$TELEGRAM_CHAT_ID" \
+    curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+        -d "chat_id=$CHAT_ID" \
         -d "text=$test_message" > /dev/null
     
     log_message "SUCCESS" "Notification d'installation envoyée"

@@ -1,18 +1,18 @@
 #!/bin/bash
 
 # Configuration de l'API Telegram
-API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
+API="https://api.telegram.org/bot${BOT_TOKEN}"
 
 # Fonction d'envoi de message Telegram
 function telegram_text_send() {
     local TEXT="$1"
-    if [[ -z "$TELEGRAM_CHAT_ID" || -z "$TEXT" ]]; then
+    if [[ -z "$CHAT_ID" || -z "$TEXT" ]]; then
         log_error "Chat ID ou texte manquant"
         return 1
     fi
 
     local response
-    response=$(curl -s -d "chat_id=${TELEGRAM_CHAT_ID}&text=${TEXT}&parse_mode=markdown" "${API}/sendMessage" 2>/tmp/curl_error.log)
+    response=$(curl -s -d "chat_id=${CHAT_ID}&text=${TEXT}&parse_mode=markdown" "${API}/sendMessage" 2>/tmp/curl_error.log)
     local curl_status=$?
 
     if [ $curl_status -ne 0 ]; then
