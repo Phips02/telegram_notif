@@ -285,27 +285,40 @@ create_notification_message() {
     local active_sessions=$(who | wc -l)
     local sessions_list=""
     
-    # Générer la liste des sessions actives
-    if [ "$active_sessions" -gt 0 ]; then
+    # Générer la liste des sessions actives (comme dans l'ancienne version)
+    if [ "$active_sessions" -gt 0 ] && [ "$active_sessions" -le 10 ]; then
         sessions_list="
 
 👥 Sessions actives sur la machine :"
+        
+        local who_output=$(who 2>/dev/null)
         while IFS= read -r session_line; do
             if [ -n "$session_line" ]; then
                 local session_user=$(echo "$session_line" | awk '{print $1}')
                 local session_terminal=$(echo "$session_line" | awk '{print $2}')
                 local session_time=$(echo "$session_line" | awk '{print $3, $4}')
-                local session_ip=$(echo "$session_line" | awk '{print $5}' | tr -d '()')
+                local session_ip=$(echo "$session_line" | grep -o '([^)]*)' | tr -d '()')
                 
-                if [ -n "$session_ip" ] && [ "$session_ip" != "" ]; then
-                    sessions_list="$sessions_list
-• $session_user ($session_terminal) depuis $session_ip à $session_time"
+                local type_conn="Autre"
+                if [[ "$session_terminal" == pts/* ]]; then
+                    type_conn="SSH"
+                elif [[ "$session_terminal" == tty* ]]; then
+                    type_conn="Console"
+                fi
+                
+                if [ -n "$session_ip" ]; then
+                    sessions_list="${sessions_list}
+• $type_conn ($session_terminal) depuis $session_ip à $session_time"
                 else
-                    sessions_list="$sessions_list
-• $session_user ($session_terminal) à $session_time"
+                    sessions_list="${sessions_list}
+• $type_conn ($session_terminal) à $session_time"
                 fi
             fi
-        done < <(who)
+        done <<< "$who_output"
+    elif [ "$active_sessions" -gt 10 ]; then
+        sessions_list="
+
+👥 Trop de sessions pour affichage détaillé ($active_sessions)"
     else
         sessions_list="
 
