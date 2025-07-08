@@ -1,5 +1,5 @@
 # 🔔 Système de surveillance des connexions serveur
-Version 4.8 - Intégré avec Phips Logger V3
+Version 4.8 -  avec Phips Logger V3
 
 ## 🎯 À propos
 
@@ -19,15 +19,30 @@ Système de surveillance complète pour recevoir des notifications Telegram lors
 - ✅ **Intégration Phips Logger V3** pour logs centralisés
 - ✅ **Détection spécifique Proxmox** avec IP source
 - ✅ **Messages modernes** avec emojis et séparations Unicode
-- ✅ **Configuration unifiée** Telegram
-- ✅ **Performance optimisée** et script plus court
-- ✅ **Informations détaillées** (terminal, sessions actives)
+- ✅ **Configuration séparée** (identifiants + paramètres)
+- ✅ **Performance optimisée** avec exécution en arrière-plan
+- ✅ **Installation automatisée** avec gestion des dépendances
+- ✅ **Architecture moderne** avec fichiers de configuration séparés
+
+## 📁 Fichiers du dépôt
+
+| Fichier | Description |
+|---------|-------------|
+| `install_telegram_notif.sh` | Script d'installation automatique |
+| `telegram_connection_notif.sh` | Script principal de notification |
+| `telegram.functions.sh` | Fonctions communes pour l'API Telegram |
+| `credentials_example.cfg` | Exemple de configuration des identifiants |
+| `telegram_notif_example.cfg` | Exemple de configuration du système |
+| `README.md` | Documentation complète |
 
 ## 🚀 Installation
 
 ### Prérequis
 
-**1. Installer Phips Logger V3 (obligatoire) :**
+**1. Phips Logger V3 (installation automatique) :**
+Le script d'installation se charge automatiquement de télécharger et installer le Phips Logger V3 depuis le dépôt officiel si nécessaire. Aucune action manuelle requise.
+
+**Installation manuelle du Phips Logger (si nécessaire) :**
 ```bash
 cd /tmp
 git clone https://github.com/Phips02/Phips_logger_v3.git
@@ -46,15 +61,15 @@ sudo apt install curl wget jq git -y
 
 **Option 1 - Installation automatique :**
 ```bash
-su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/Bash/main/Telegram/Telegram%20-%20telegram_notif_v3.0/install_telegram_notif.sh && chmod +x install_telegram_notif.sh && ./install_telegram_notif.sh"
+su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_telegram_notif.sh && chmod +x install_telegram_notif.sh && ./install_telegram_notif.sh"
 ```
 
 **Option 2 - Installation manuelle :**
 ```bash
 # Cloner le dépôt
 cd /tmp
-git clone https://github.com/Phips02/telegram_notif_v3.0.git
-cd telegram_notif_v3.0
+git clone https://github.com/Phips02/telegram_notif.git
+cd telegram_notif
 
 # Exécuter l'installation
 chmod +x install_telegram_notif.sh
@@ -63,14 +78,18 @@ sudo ./install_telegram_notif.sh
 
 ## Structure des fichiers
 ```
-/usr/local/bin/telegram/notif_connexion/
-├── telegram.sh                  # Script principal (intégré avec Phips Logger)
+/usr/local/bin/telegram_notif/
+├── telegram_connection_notif.sh # Script principal de notification
 └── telegram.functions.sh        # Fonctions communes (API et utilitaires)
 
 /etc/telegram/
-└── credentials.cfg              # Configuration Telegram unifiée
+├── credentials.cfg              # Identifiants Telegram partagés
+└── telegram_notif.cfg          # Configuration spécifique du système
 
-/usr/local/bin/logger.sh        # Logger Phips (dépendance)
+/usr/local/bin/
+├── logger.sh                    # Logger Phips V3 (fichier principal)
+└── phips_logger                 # Lien symbolique vers logger.sh
+
 /etc/pam.d/su                   # Configuration PAM pour les notifications su
 /etc/bash.bashrc                # Configuration système pour l'exécution automatique
 ```
@@ -79,30 +98,43 @@ sudo ./install_telegram_notif.sh
 
 Le système utilise une configuration Telegram unifiée compatible avec Phips Logger V3.
 
-**Fichier de configuration:** `/etc/telegram/credentials.cfg`
+**Configuration automatique lors de l'installation :**
+Le script d'installation vous demandera vos identifiants Telegram et créera automatiquement les fichiers de configuration.
 
-**Configuration manuelle:**
+**Configuration manuelle (si nécessaire) :**
+
+**1. Identifiants Telegram :** `/etc/telegram/credentials.cfg`
 ```bash
-# Créer le répertoire
-sudo mkdir -p /etc/telegram
-
-# Créer le fichier de configuration
-sudo nano /etc/telegram/credentials.cfg
-```
-
-**Contenu du fichier:**
-```bash
-# Identifiants Telegram
+# Identifiants Telegram partagés
 TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN_HERE"
 TELEGRAM_CHAT_ID="YOUR_CHAT_ID_HERE"
 
-# Export des variables
+# Export des variables pour compatibilité
 export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+```
+
+**2. Configuration spécifique :** `/etc/telegram/telegram_notif.cfg`
+```bash
+# Configuration pour le logger Phips
+TELEGRAM_NOTIFICATION_LEVEL="WARNING"
+TELEGRAM_MESSAGE_FORMAT="simple"
+
+# Configuration pour telegram_notif
+CURL_TIMEOUT=10
+DATE_FORMAT="%Y-%m-%d %H:%M:%S"
+
+# Options de performance (pour éviter les lags de connexion)
+SKIP_PUBLIC_IP="false"  # Mettre à "true" pour désactiver la récupération IP publique
+
+# Export des variables
+export TELEGRAM_NOTIFICATION_LEVEL TELEGRAM_MESSAGE_FORMAT
+export CURL_TIMEOUT DATE_FORMAT SKIP_PUBLIC_IP
 ```
 
 **Sécuriser les permissions:**
 ```bash
 sudo chmod 600 /etc/telegram/credentials.cfg
+sudo chmod 644 /etc/telegram/telegram_notif.cfg
 ```
 
 ## ⚡ Optimisations de performance
@@ -177,16 +209,21 @@ export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID SKIP_PUBLIC_IP CURL_TIMEOUT
 **1. Tester la configuration :**
 ```bash
 # Vérifier que le logger est installé
+ls -la /usr/local/bin/phips_logger
 ls -la /usr/local/bin/logger.sh
 
 # Vérifier la configuration Telegram
 ls -la /etc/telegram/credentials.cfg
+ls -la /etc/telegram/telegram_notif.cfg
 ```
 
 **2. Tester manuellement :**
 ```bash
-# Exécuter le script de notification
-sudo /usr/local/bin/telegram/notif_connexion/telegram.sh
+# Exécuter le script de notification en mode test
+sudo /usr/local/bin/telegram_notif/telegram_connection_notif.sh --test
+
+# Vérifier la version
+/usr/local/bin/telegram_notif/telegram_connection_notif.sh --version
 ```
 
 **3. Tester une nouvelle connexion :**
@@ -211,47 +248,79 @@ curl -s "https://api.telegram.org/bot<YOUR_TOKEN>/getMe"
 
 **Problème : Logger non trouvé**
 ```bash
-# Réinstaller le logger
-cd /tmp && git clone https://github.com/Phips02/Phips_logger_v3.git
-cd Phips_logger_v3 && sudo ./install.sh
+# Vérifier la présence du logger
+ls -la /usr/local/bin/phips_logger
+ls -la /usr/local/bin/logger.sh
+
+# Réinstaller le logger si nécessaire
+cd /tmp
+git clone https://github.com/Phips02/Phips_logger_v3.git
+cd Phips_logger_v3
+chmod +x install.sh
+sudo ./install.sh
 ```
 
 **Problème : Permissions**
 ```bash
 # Corriger les permissions
 sudo chmod 600 /etc/telegram/credentials.cfg
-sudo chmod +x /usr/local/bin/telegram/notif_connexion/telegram.sh
+sudo chmod 644 /etc/telegram/telegram_notif.cfg
+sudo chmod +x /usr/local/bin/telegram_notif/telegram_connection_notif.sh
+sudo chmod +x /usr/local/bin/telegram_notif/telegram.functions.sh
 ```
 
 ## Mise à jour
 
-Pour mettre à jour le système de notification, exécutez les commandes suivantes en tant que root :
+Pour mettre à jour le système de notification, vous pouvez soit réexécuter le script d'installation, soit effectuer une mise à jour manuelle.
 
-1. Se connecter en root :
-```bash
-su -
-```
-
-2. Copier et exécuter la commande de mise à jour :
-```bash
-cd /tmp && wget -qO update_telegram_notif.sh --no-cache https://raw.githubusercontent.com/Phips02/Bash/main/Telegram/Telegram%20-%20telegram_notif_v2/update_telegram_notif.sh && chmod +x update_telegram_notif.sh && ./update_telegram_notif.sh
-```
-
-## Mise à jour manuelle
+### Méthode 1 : Réinstallation complète (recommandée)
 ```bash
 # Se connecter en root
 su -
 
-# Télécharger le script de mise à jour
+# Réexécuter l'installation (conserve la configuration existante)
 cd /tmp
-rm -rf Bash
-git clone https://github.com/Phips02/Bash.git
-cd Bash/Telegram/Telegram\ -\ telegram_notif_v2
-cp telegram.sh /usr/local/bin/telegram/notif_connexion/
-chmod +x /usr/local/bin/telegram/notif_connexion/telegram.sh
-cd /tmp
-rm -rf Bash
+wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_telegram_notif.sh
+chmod +x install_telegram_notif.sh
+./install_telegram_notif.sh
 ```
+
+### Méthode 2 : Mise à jour manuelle
+```bash
+# Se connecter en root
+su -
+
+# Télécharger les derniers scripts
+cd /tmp
+rm -rf telegram_notif
+git clone https://github.com/Phips02/telegram_notif.git
+cd telegram_notif
+
+# Copier les nouveaux scripts
+cp telegram_connection_notif.sh /usr/local/bin/telegram_notif/
+cp telegram.functions.sh /usr/local/bin/telegram_notif/
+
+# Appliquer les permissions
+chmod +x /usr/local/bin/telegram_notif/telegram_connection_notif.sh
+chmod +x /usr/local/bin/telegram_notif/telegram.functions.sh
+
+# Nettoyer
+cd /tmp
+rm -rf telegram_notif
+
+echo "Mise à jour terminée !"
+```
+
+## ⚠️ Compatibilité et notes importantes
+
+- **Système supporté :** Debian/Ubuntu (testé sur Debian 11/12, Ubuntu 20.04/22.04)
+- **Proxmox :** Compatible avec Proxmox VE 7.x et 8.x
+- **Architecture :** x86_64 (AMD64)
+- **Prérequis :** bash, curl, wget (installés automatiquement)
+- **Droits :** Installation en tant que root obligatoire
+
+**Migration depuis les anciennes versions :**
+Si vous avez une ancienne version installée, le script d'installation détectera et migrera automatiquement votre configuration.
 
 ## Licence
 Ce projet est sous licence GNU GPLv3 - voir le fichier [LICENSE](LICENSE) pour plus de détails.
@@ -272,13 +341,15 @@ Pour désinstaller complètement le système de notification (en tant que root) 
 su -
 
 # Supprimer la configuration dans bash.bashrc et PAM
-sed -i '/Notification Telegram/,/^fi$/d' /etc/bash.bashrc
-sed -i '/Notification Telegram/,/telegram.sh/d' /etc/pam.d/su
+sed -i '/telegram_notif/d' /etc/bash.bashrc
+sed -i '/telegram_connection_notif/d' /etc/pam.d/su
 
-# Supprimer les fichiers et sauvegardes
-rm -rf /etc/telegram/notif_connexion
-rm -rf /usr/local/bin/telegram/notif_connexion
+# Supprimer les fichiers et répertoires
+rm -rf /etc/telegram/
+rm -rf /usr/local/bin/telegram_notif/
 
-# Supprimer le groupe
-groupdel telegramnotif
+# Optionnel : supprimer le logger Phips si non utilisé ailleurs
+# rm -rf /usr/local/bin/phips_logger/
+
+echo "Désinstallation terminée !"
 ``` 

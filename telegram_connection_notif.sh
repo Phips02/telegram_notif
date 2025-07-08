@@ -16,8 +16,8 @@ export ENABLE_TELEGRAM="false"  # Éviter la boucle infinie
 SKIP_PUBLIC_IP="${SKIP_PUBLIC_IP:-false}"  # Mettre à "true" pour désactiver la récupération IP publique
 
 # Intégration du logger Phips
-if [ -f "/usr/local/bin/logger.sh" ]; then
-    source "/usr/local/bin/logger.sh"
+if [ -f "/usr/local/bin/phips_logger" ]; then
+    source "/usr/local/bin/phips_logger"
 else
     # Fallback si le logger n'est pas installé
     log_info() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] [telegram_notif] $1"; }

@@ -75,21 +75,38 @@ check_prerequisites() {
     fi
     
     # Vérification du Phips Logger
-    if [ ! -f "/usr/local/bin/phips_logger/universal_logger.sh" ]; then
+    if [ ! -f "/usr/local/bin/phips_logger" ] || [ ! -f "/usr/local/bin/logger.sh" ]; then
         log_message "WARNING" "Phips Logger V3 non détecté"
         log_message "INFO" "Installation automatique du Phips Logger..."
         
-        # Créer le répertoire
-        mkdir -p /usr/local/bin/phips_logger
+        # Sauvegarder le répertoire actuel
+        local current_dir=$(pwd)
         
-        # Télécharger le logger
-        if wget -q "https://raw.githubusercontent.com/Phips02/Bash/main/Logger/universal_logger.sh" -O "/usr/local/bin/phips_logger/universal_logger.sh"; then
-            chmod +x "/usr/local/bin/phips_logger/universal_logger.sh"
-            log_message "SUCCESS" "Phips Logger V3 installé avec succès"
+        # Aller dans /tmp pour l'installation
+        cd /tmp
+        
+        # Nettoyer les anciens fichiers
+        rm -rf Phips_logger_v3
+        
+        # Cloner et installer le Phips Logger V3
+        if git clone https://github.com/Phips02/Phips_logger_v3.git; then
+            cd Phips_logger_v3
+            chmod +x install.sh
+            if ./install.sh; then
+                log_message "SUCCESS" "Phips Logger V3 installé avec succès"
+            else
+                log_message "WARNING" "Échec de l'installation du Phips Logger"
+                log_message "INFO" "Le script fonctionnera avec un logging de base"
+            fi
+            cd /tmp
+            rm -rf Phips_logger_v3
         else
-            log_message "WARNING" "Échec de l'installation du Phips Logger"
+            log_message "WARNING" "Échec du téléchargement du Phips Logger"
             log_message "INFO" "Le script fonctionnera avec un logging de base"
         fi
+        
+        # Retourner au répertoire original
+        cd "$current_dir"
     else
         log_message "SUCCESS" "Phips Logger V3 détecté"
     fi
