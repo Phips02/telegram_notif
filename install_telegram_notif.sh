@@ -286,11 +286,12 @@ export TELEGRAM_NOTIFICATION_LEVEL TELEGRAM_MESSAGE_FORMAT
 export CURL_TIMEOUT DATE_FORMAT SKIP_PUBLIC_IP
 EOF
     
-    # Permissions des fichiers de configuration
-    chmod 600 /etc/telegram/credentials.cfg      # Sécurisé (identifiants)
-    chmod 644 /etc/telegram/telegram_notif.cfg   # Lecture pour tous
+    # Permissions et propriété - Permettre à tous les utilisateurs de lire les configs
     chown root:root /etc/telegram/credentials.cfg
+    chmod 644 /etc/telegram/credentials.cfg  # Lisible par tous pour les notifications
+    
     chown root:root /etc/telegram/telegram_notif.cfg
+    chmod 644 /etc/telegram/telegram_notif.cfg
     
     log_message "SUCCESS" "Fichiers de configuration créés"
 }
@@ -321,12 +322,35 @@ EOF
         log_message "INFO" "Configuration bash.bashrc déjà présente"
     fi
     
-    # Configuration PAM SSH pour toutes les connexions SSH (TEMPORAIREMENT DÉSACTIVÉE)
+    # Configuration profile pour tous les shells (zsh, dash, etc.)
+    if ! grep -q "telegram_connection_notif" /etc/profile; then
+        cat >> /etc/profile << 'EOF'
+
+# Notification Telegram pour connexions (tous shells)
+if [ -n "$PS1" ] && [ "$TERM" != "unknown" ]; then
+    if [ -z "$TELEGRAM_NOTIF_SENT" ]; then
+        export TELEGRAM_NOTIF_SENT=1
+        if [ -r "/etc/telegram/credentials.cfg" ] && [ -r "/etc/telegram/telegram_notif.cfg" ]; then
+            nohup /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background >/dev/null 2>&1 &
+        fi
+    fi
+fi
+EOF
+        log_message "SUCCESS" "Configuration profile ajoutée"
+    else
+        log_message "INFO" "Configuration profile déjà présente"
+    fi
+    
+    # Configuration PAM SSH pour capturer TOUTES les connexions SSH
     local pam_ssh_file="/etc/pam.d/sshd"
     if [ -f "$pam_ssh_file" ]; then
-        # Supprimer les anciennes configurations PAM SSH pour éviter les doublons
+        # Supprimer les anciennes configurations
         sed -i '/telegram_connection_notif/d' "$pam_ssh_file"
-        log_message "INFO" "Configuration PAM SSH supprimée (bash.bashrc suffit)"
+        
+        # Ajouter une configuration PAM qui fonctionne pour tous les utilisateurs
+        # Utiliser pam_exec avec seteuid pour exécuter en tant que root
+        echo "session optional pam_exec.so seteuid /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background" >> "$pam_ssh_file"
+        log_message "SUCCESS" "Configuration PAM SSH ajoutée (capture toutes connexions)"
     else
         log_message "WARNING" "Fichier PAM SSH non trouvé"
     fi
