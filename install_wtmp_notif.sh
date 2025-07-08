@@ -103,7 +103,17 @@ get_telegram_credentials() {
             log_message "INFO" "Reconfiguration des identifiants..."
         else
             log_message "SUCCESS" "Configuration existante conservée"
-            return 0
+            # Charger les variables existantes
+            source "/etc/telegram/credentials.cfg"
+            if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+                log_message "ERROR" "Configuration existante corrompue - reconfiguration nécessaire"
+            else
+                # Afficher les identifiants masqués pour vérification
+                local masked_token="${BOT_TOKEN:0:10}...${BOT_TOKEN: -10}"
+                local masked_chat="${CHAT_ID:0:3}...${CHAT_ID: -3}"
+                log_message "INFO" "Variables chargées - BOT_TOKEN: $masked_token, CHAT_ID: $masked_chat"
+                return 0
+            fi
         fi
     fi
     
