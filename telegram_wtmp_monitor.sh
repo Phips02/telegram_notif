@@ -97,12 +97,9 @@ telegram_send() {
     local message="$1"
     local api_url="https://api.telegram.org/bot${BOT_TOKEN}/sendMessage"
     
-    # Nettoyer le message
-    message=$(echo "$message" | sed 's/[^[:print:][:space:]]//g')
-    
-    # Créer fichier temporaire
+    # Créer fichier temporaire avec encodage UTF-8
     local temp_file="/tmp/telegram_msg_$$.txt"
-    echo "$message" > "$temp_file"
+    printf '%s' "$message" > "$temp_file"
     
     # Tentative d'envoi avec markdown
     local response=$(curl -s --max-time "$CURL_TIMEOUT" \
@@ -284,8 +281,30 @@ create_notification_message() {
     local local_ip=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "N/A")
     local public_ip=$(get_public_ip)
     
-    # Compter les sessions actives
+    # Compter les sessions actives et générer la liste détaillée
     local active_sessions=$(who | wc -l)
+    local sessions_list=""
+    
+    # Générer la liste des sessions actives
+    if [ "$active_sessions" -gt 0 ]; then
+        sessions_list="\n👥 Sessions actives sur la machine :"
+        while IFS= read -r session_line; do
+            if [ -n "$session_line" ]; then
+                local session_user=$(echo "$session_line" | awk '{print $1}')
+                local session_terminal=$(echo "$session_line" | awk '{print $2}')
+                local session_time=$(echo "$session_line" | awk '{print $3, $4}')
+                local session_ip=$(echo "$session_line" | awk '{print $5}' | tr -d '()')
+                
+                if [ -n "$session_ip" ] && [ "$session_ip" != "" ]; then
+                    sessions_list="$sessions_list\n• $session_user ($session_terminal) depuis $session_ip à $session_time"
+                else
+                    sessions_list="$sessions_list\n• $session_user ($session_terminal) à $session_time"
+                fi
+            fi
+        done < <(who)
+    else
+        sessions_list="\n👥 Aucune session active détectée"
+    fi
     
     # Déterminer le titre du message selon le statut
     local message_title
@@ -295,7 +314,7 @@ create_notification_message() {
         message_title="*Connexion $connection_type récente*"
     fi
     
-    # Construire le message
+    # Construire le message avec le nouveau format
     local message="$connection_icon $message_title
 
 📅 $datetime
@@ -309,8 +328,7 @@ Connexion depuis :
 📡 IP Source: $host
 🌍 IP Publique: $public_ip
 ───────────────────────────
-📺 Terminal: $terminal
-👥 Sessions actives: $active_sessions"
+📺 Terminal: $terminal$sessions_list"
 
     echo "$message"
 }
