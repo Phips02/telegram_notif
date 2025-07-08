@@ -18,11 +18,9 @@ Système de surveillance complète pour recevoir des notifications Telegram lors
 - ✅ **Détection intelligente** de tous les types de connexion
 - ✅ **Intégration Phips Logger V3** pour logs centralisés
 - ✅ **Détection spécifique Proxmox** avec IP source
-- ✅ **Messages modernes** avec emojis et séparations Unicode
 - ✅ **Configuration séparée** (identifiants + paramètres)
 - ✅ **Performance optimisée** avec exécution en arrière-plan
 - ✅ **Installation automatisée** avec gestion des dépendances
-- ✅ **Architecture moderne** avec fichiers de configuration séparés
 
 ## 📁 Fichiers du dépôt
 
@@ -39,23 +37,14 @@ Système de surveillance complète pour recevoir des notifications Telegram lors
 
 ### Prérequis
 
-**1. Phips Logger V3 (installation automatique) :**
-Le script d'installation se charge automatiquement de télécharger et installer le Phips Logger V3 depuis le dépôt officiel si nécessaire. Aucune action manuelle requise.
+**Aucun prérequis manuel !** 🎉
 
-**Installation manuelle du Phips Logger (si nécessaire) :**
-```bash
-cd /tmp
-git clone https://github.com/Phips02/Phips_logger_v3.git
-cd Phips_logger_v3
-chmod +x install.sh
-sudo ./install.sh
-```
+Le script d'installation se charge automatiquement de :
+- ✅ Vérifier et installer les dépendances système (curl, wget, git)
+- ✅ Télécharger et installer le Phips Logger V3 si nécessaire
+- ✅ Configurer tous les fichiers et permissions
 
-**2. Installer les dépendances système :**
-```bash
-sudo apt update
-sudo apt install curl wget jq git -y
-```
+**Seule exigence :** Exécuter le script en tant que **root** (avec `su -` ou `sudo`)
 
 ### Installation du système de notification
 
