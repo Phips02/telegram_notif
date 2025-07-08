@@ -287,7 +287,9 @@ create_notification_message() {
     
     # Générer la liste des sessions actives
     if [ "$active_sessions" -gt 0 ]; then
-        sessions_list="\n👥 Sessions actives sur la machine :"
+        sessions_list="
+
+👥 Sessions actives sur la machine :"
         while IFS= read -r session_line; do
             if [ -n "$session_line" ]; then
                 local session_user=$(echo "$session_line" | awk '{print $1}')
@@ -296,14 +298,18 @@ create_notification_message() {
                 local session_ip=$(echo "$session_line" | awk '{print $5}' | tr -d '()')
                 
                 if [ -n "$session_ip" ] && [ "$session_ip" != "" ]; then
-                    sessions_list="$sessions_list\n• $session_user ($session_terminal) depuis $session_ip à $session_time"
+                    sessions_list="$sessions_list
+• $session_user ($session_terminal) depuis $session_ip à $session_time"
                 else
-                    sessions_list="$sessions_list\n• $session_user ($session_terminal) à $session_time"
+                    sessions_list="$sessions_list
+• $session_user ($session_terminal) à $session_time"
                 fi
             fi
         done < <(who)
     else
-        sessions_list="\n👥 Aucune session active détectée"
+        sessions_list="
+
+👥 Aucune session active détectée"
     fi
     
     # Déterminer le titre du message selon le statut
