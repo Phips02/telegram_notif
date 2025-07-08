@@ -193,7 +193,7 @@ create_directories() {
 download_scripts() {
     log_message "INFO" "Téléchargement des scripts..."
     
-    local base_url="https://raw.githubusercontent.com/Phips02/Bash/main/Telegram/telegram_notif_v3.0"
+    local base_url="https://raw.githubusercontent.com/Phips02/telegram_notif/main"
     local script_dir="/usr/local/bin/telegram_notif"
     
     # Télécharger le script principal
