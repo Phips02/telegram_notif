@@ -234,14 +234,25 @@ create_notification_message() {
     local host="$3"
     local datetime="$4"
     
-    # Déterminer le type de connexion
+    # Déterminer le type de connexion avec détection améliorée
     local connection_type="Inconnue"
+    local connection_icon="🔔"
+    
     if [[ "$terminal" =~ ^pts/ ]]; then
-        connection_type="SSH"
+        # Vérifier si c'est une élévation su en comparant avec les sessions actives
+        if [[ "$host" == "" || "$host" == "-" ]]; then
+            connection_type="Élévation su"
+            connection_icon="🔐"
+        else
+            connection_type="SSH"
+            connection_icon="🔑"
+        fi
     elif [[ "$terminal" =~ ^tty ]]; then
-        connection_type="Console"
+        connection_type="Console Proxmox"
+        connection_icon="📺"
     elif [[ "$terminal" =~ ^: ]]; then
         connection_type="X11/GUI"
+        connection_icon="💻"
     fi
     
     # Informations système
@@ -253,7 +264,7 @@ create_notification_message() {
     local active_sessions=$(who | wc -l)
     
     # Construire le message
-    local message="🔔 *Nouvelle connexion $connection_type*
+    local message="$connection_icon *Nouvelle connexion $connection_type*
 
 📅 $datetime
 ───────────────────────────
@@ -325,8 +336,8 @@ monitor_wtmp() {
         local new_connections=0
         
         # Utiliser last avec limite de temps plutôt que de lignes
-        # -s pour depuis (since) hier pour éviter trop d'historique
-        local yesterday=$(date -d "yesterday" "+%Y-%m-%d %H:%M")
+        # -s pour depuis (since) la dernière heure pour capturer toutes les connexions récentes
+        local since_time=$(date -d "1 hour ago" "+%Y-%m-%d %H:%M")
         
         # Lire les connexions récentes avec format fixe
         # CORRECTION BUG CRITIQUE: Utiliser redirection de processus au lieu de pipe
@@ -355,8 +366,8 @@ monitor_wtmp() {
                 if ! grep -q "$connection_hash" "$seen_connections_file" 2>/dev/null; then
                     local login_timestamp=$(datetime_to_timestamp "$PARSED_DATETIME")
                     
-                    # Vérifier si c'est vraiment récent (dernières 24h)
-                    local min_timestamp=$((current_time - 86400))
+                    # Vérifier si c'est vraiment récent (dernières 2 heures)
+                    local min_timestamp=$((current_time - 7200))
                     
                     if [ "$login_timestamp" -gt "$min_timestamp" ]; then
                         log_info "Nouvelle connexion: $PARSED_USER@$PARSED_TERMINAL depuis $PARSED_HOST à $PARSED_DATETIME"
@@ -375,7 +386,7 @@ monitor_wtmp() {
                     fi
                 fi
             fi
-        done < <(LC_ALL=C last -F -w -s "$yesterday" 2>/dev/null)
+        done < <(LC_ALL=C last -F -w -s "$since_time" 2>/dev/null)
         
         # Nettoyer le fichier des connexions vues (garder seulement les 1000 dernières)
         if [ -f "$seen_connections_file" ]; then
@@ -423,6 +434,7 @@ Options:
   restart     Redémarrer le daemon
   status      Afficher le statut
   test        Tester l'envoi d'une notification
+  debug       Debug du parsing des connexions récentes
   --version   Afficher la version
   --help      Afficher cette aide
 
@@ -467,6 +479,32 @@ show_status() {
     else
         echo "Daemon arrêté"
     fi
+}
+
+# Fonction de debug pour tester le parsing
+debug_parsing() {
+    log_info "Debug du parsing des connexions récentes..."
+    load_config
+    
+    local since_time=$(date -d "1 hour ago" "+%Y-%m-%d %H:%M")
+    log_info "Recherche des connexions depuis: $since_time"
+    
+    echo "=== Sortie brute de 'last' ==="
+    LC_ALL=C last -F -w -s "$since_time" 2>/dev/null
+    
+    echo ""
+    echo "=== Parsing des lignes ==="
+    while IFS= read -r line; do
+        echo "Ligne: $line"
+        if parse_last_line "$line"; then
+            echo "  ✓ Parsé: $PARSED_USER@$PARSED_TERMINAL depuis $PARSED_HOST à $PARSED_DATETIME"
+            local connection_id="${PARSED_USER}:${PARSED_TERMINAL}:${PARSED_HOST}:${PARSED_DATETIME}"
+            echo "  ID: $connection_id"
+        else
+            echo "  ✗ Ignoré"
+        fi
+        echo ""
+    done < <(LC_ALL=C last -F -w -s "$since_time" 2>/dev/null)
 }
 
 # Fonction de test
@@ -562,6 +600,10 @@ main() {
             check_requirements
             test_notification
             ;;
+        "debug")
+            check_requirements
+            debug_parsing
+            ;;
         "--version")
             echo "Telegram WTMP Monitor v$TELEGRAM_VERSION"
             ;;
@@ -569,7 +611,7 @@ main() {
             show_help
             ;;
         *)
-            echo "Usage: $0 {start|stop|restart|status|test|--version|--help}"
+            echo "Usage: $0 {start|stop|restart|status|test|debug|--version|--help}"
             exit 1
             ;;
     esac
