@@ -69,13 +69,15 @@ safe_source() {
     return 0
 }
 
-# Chargement des identifiants Telegram
-if [ -r "/etc/telegram/credentials.cfg" ]; then
-    source "/etc/telegram/credentials.cfg" 2>/dev/null
-else
+# Vérification précoce des fichiers de configuration
+if [ ! -r "/etc/telegram/credentials.cfg" ]; then
     log_error "Identifiants Telegram non trouvés: /etc/telegram/credentials.cfg"
-    exit 1
+    # Sortir silencieusement pour ne pas perturber PAM
+    exit 0
 fi
+
+# Chargement des identifiants Telegram
+source "/etc/telegram/credentials.cfg" 2>/dev/null
 
 # Chargement de la configuration spécifique
 if [ -r "/etc/telegram/telegram_notif.cfg" ]; then
@@ -91,7 +93,8 @@ fi
 # Vérification des variables essentielles
 if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
     log_error "BOT_TOKEN ou CHAT_ID non défini"
-    exit 1
+    # Sortir silencieusement pour ne pas perturber PAM
+    exit 0
 fi
 
 log_debug "Configuration Telegram chargée avec succès"
@@ -101,7 +104,8 @@ log_debug "Vérification des dépendances..."
 for dep in curl; do
     if ! command -v "$dep" &> /dev/null; then
         log_error "Dépendance manquante : $dep"
-        exit 1
+        # Sortir silencieusement pour ne pas perturber PAM
+        exit 0
     fi
 done
 
@@ -109,7 +113,8 @@ done
 BASE_DIR="/usr/local/bin/telegram_notif"
 if [ ! -f "$BASE_DIR/telegram.functions.sh" ]; then
     log_error "Fichier de fonctions introuvable: $BASE_DIR/telegram.functions.sh"
-    exit 1
+    # Sortir silencieusement pour ne pas perturber PAM
+    exit 0
 fi
 source "$BASE_DIR/telegram.functions.sh"
 
@@ -227,6 +232,42 @@ collect_info() {
 
 }
 
+# Système de verrou global pour éviter les notifications multiples
+# Créer un identifiant basé sur la session réelle, pas sur le processus
+if [ -n "$SSH_CONNECTION" ]; then
+    # Pour SSH, utiliser l'IP source et le terminal
+    IP_SRC=$(echo "$SSH_CONNECTION" | awk '{print $1}')
+    TERMINAL=$(tty 2>/dev/null | sed 's|/dev/||' | tr '/' '_')
+    SESSION_ID="ssh_${USER}_${IP_SRC}_${TERMINAL}"
+elif [ -n "$SSH_CLIENT" ]; then
+    # Pour SSH legacy
+    IP_SRC=$(echo "$SSH_CLIENT" | awk '{print $1}')
+    TERMINAL=$(tty 2>/dev/null | sed 's|/dev/||' | tr '/' '_')
+    SESSION_ID="ssh_${USER}_${IP_SRC}_${TERMINAL}"
+else
+    # Pour console locale ou autres
+    TERMINAL=$(tty 2>/dev/null | sed 's|/dev/||' | tr '/' '_')
+    SESSION_ID="local_${USER}_${TERMINAL}_$(date +%Y%m%d_%H%M)"
+fi
+
+LOCK_FILE="/tmp/telegram_notif_${SESSION_ID}"
+
+# Vérifier si une notification a déjà été envoyée pour cette session
+if [ -f "$LOCK_FILE" ]; then
+    # Vérifier l'âge du fichier de verrou (max 2 minutes)
+    if [ $(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0))) -lt 120 ]; then
+        log_debug "Notification déjà envoyée pour cette session ($SESSION_ID)"
+        exit 0
+    fi
+fi
+
+# Créer le fichier de verrou
+touch "$LOCK_FILE" 2>/dev/null
+log_debug "Verrou créé pour session: $SESSION_ID"
+
+# Nettoyer les anciens fichiers de verrou (plus de 30 minutes)
+find /tmp -name "telegram_notif_*" -type f -mmin +30 -delete 2>/dev/null
+
 # Collecter les informations
 collect_info
 
@@ -242,16 +283,19 @@ Connexion sur la machine : %0A\
 Connexion depuis : %0A\
 📡 IP Client: $IP_SOURCE %0A\
 🌍 IP Publique: $IP_PUBLIC %0A\
-👥 Sessions actives: %0A\
+👥 Sessions actives sur la machine: %0A\
 $SESSIONS_DETAIL
 ─────────────────────────── %0A\
 📺 Terminal: $TERMINAL_INFO"
 
-# Envoi du message
-if ! telegram_text_send "$TEXT"; then
+# Envoi du message avec gestion d'erreur robuste
+if telegram_text_send "$TEXT"; then
+    log_info "Notification envoyée avec succès"
+else
     log_error "Échec de l'envoi de la notification"
-    exit 1
+    # Ne pas faire échouer le processus PAM avec exit 1
+    # Sortir silencieusement pour éviter les erreurs PAM
 fi
-log_info "Notification envoyée avec succès"
 
+# Toujours sortir avec succès pour ne pas perturber PAM
 exit 0

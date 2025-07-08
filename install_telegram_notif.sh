@@ -321,16 +321,12 @@ EOF
         log_message "INFO" "Configuration bash.bashrc déjà présente"
     fi
     
-    # Configuration PAM SSH pour toutes les connexions SSH
+    # Configuration PAM SSH pour toutes les connexions SSH (TEMPORAIREMENT DÉSACTIVÉE)
     local pam_ssh_file="/etc/pam.d/sshd"
     if [ -f "$pam_ssh_file" ]; then
-        if ! grep -q "telegram_connection_notif" "$pam_ssh_file"; then
-            # Ajouter la configuration SSH
-            echo "session optional pam_exec.so /usr/local/bin/telegram_notif/telegram_connection_notif.sh --background" >> "$pam_ssh_file"
-            log_message "SUCCESS" "Configuration PAM SSH ajoutée"
-        else
-            log_message "INFO" "Configuration PAM SSH déjà présente"
-        fi
+        # Supprimer les anciennes configurations PAM SSH pour éviter les doublons
+        sed -i '/telegram_connection_notif/d' "$pam_ssh_file"
+        log_message "INFO" "Configuration PAM SSH supprimée (bash.bashrc suffit)"
     else
         log_message "WARNING" "Fichier PAM SSH non trouvé"
     fi
