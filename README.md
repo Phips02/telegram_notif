@@ -1,56 +1,56 @@
-# 🔔 Système de surveillance des connexions serveur
-Version 4.8 -  avec Phips Logger V3
+# 🔔 Telegram WTMP Monitor
+Version 5.0 - Surveillance des connexions serveur
 
 ## 🎯 À propos
 
-Système de surveillance complète pour recevoir des notifications Telegram lors de **toutes les connexions** à votre serveur :
+Système de surveillance des connexions serveur basé sur **wtmp** pour recevoir des notifications Telegram lors de **toutes les connexions** :
 
-- 🔐 **Connexions SSH** (standard et legacy)
-- 🖥️ **Console Proxmox** (avec détection IP source)
-- 📺 **Console Web** (interfaces d'administration)
-- 💻 **Console locale** (accès direct serveur)
-- 📱 **Sessions Screen/Tmux**
-- 🔄 **Commandes su/sudo**
-- ⚙️ **Exécutions non-interactives**
+- 🔐 **Connexions SSH** (toutes versions)
+- 🖥️ **Console locale** (tty, pts)
+- 📺 **Interface graphique** (X11, sessions GUI)
+- 💻 **Connexions système** (su, sudo, login)
+- 📱 **Sessions utilisateur** (screen, tmux détectées automatiquement)
 
-## 🆕 Nouveautés V4.8
+## 🚀 Fonctionnalités V5.0
 
-- ✅ **Détection intelligente** de tous les types de connexion
-- ✅ **Intégration Phips Logger V3** pour logs centralisés
-- ✅ **Détection spécifique Proxmox** avec IP source
-- ✅ **Configuration séparée** (identifiants + paramètres)
-- ✅ **Performance optimisée** avec exécution en arrière-plan
-- ✅ **Installation automatisée** avec gestion des dépendances
+- ✅ **Surveillance unifiée** via fichier wtmp système
+- ✅ **Daemon robuste** avec gestion PID et logs
+- ✅ **Service systemd** intégré pour démarrage automatique
+- ✅ **Détection fiable** sans faux positifs
+- ✅ **Notifications temps réel** avec informations complètes
+- ✅ **Interface de gestion** complète (start/stop/status/test)
+- ✅ **Configuration flexible** et sécurisée
 
-## 📁 Fichiers du dépôt
+## 📁 Fichiers du projet
 
 | Fichier | Description |
 |---------|-------------|
-| `install_telegram_notif.sh` | Script d'installation automatique |
-| `telegram_connection_notif.sh` | Script principal de notification |
-| `telegram.functions.sh` | Fonctions communes pour l'API Telegram |
-| `credentials_example.cfg` | Exemple de configuration des identifiants |
-| `telegram_notif_example.cfg` | Exemple de configuration du système |
+| `install_wtmp_notif.sh` | Script d'installation automatique |
+| `telegram_wtmp_monitor.sh` | Daemon principal de surveillance |
+| `telegram-wtmp-monitor.service` | Service systemd |
+| `credentials_example.cfg` | Exemple configuration identifiants Telegram |
+| `telegram_notif_example.cfg` | Exemple configuration système |
 | `README.md` | Documentation complète |
 
 ## 🚀 Installation
 
 ### Prérequis
 
-**Aucun prérequis manuel !** 🎉
+**Installation automatique !** 🎉
 
 Le script d'installation se charge automatiquement de :
-- ✅ Vérifier et installer les dépendances système (curl, wget, git)
-- ✅ Télécharger et installer le Phips Logger V3 si nécessaire
-- ✅ Configurer tous les fichiers et permissions
+- ✅ Vérifier et installer les dépendances (curl, last)
+- ✅ Configurer le service systemd
+- ✅ Créer tous les fichiers et permissions
+- ✅ Tester la configuration Telegram
 
-**Seule exigence :** Exécuter le script en tant que **root** (avec `su -` ou `sudo`)
+**Exigence :** Exécuter en tant que **root** (accès à /var/log/wtmp requis)
 
-### Installation du système de notification
+### Installation du système
 
 **Option 1 - Installation automatique :**
 ```bash
-su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_telegram_notif.sh && chmod +x install_telegram_notif.sh && ./install_telegram_notif.sh"
+su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_wtmp_notif.sh && chmod +x install_wtmp_notif.sh && ./install_wtmp_notif.sh"
 ```
 
 **Option 2 - Installation manuelle :**
@@ -61,58 +61,58 @@ git clone https://github.com/Phips02/telegram_notif.git
 cd telegram_notif
 
 # Exécuter l'installation
-chmod +x install_telegram_notif.sh
-sudo ./install_telegram_notif.sh
+chmod +x install_wtmp_notif.sh
+sudo ./install_wtmp_notif.sh
 ```
 
 ## Structure des fichiers
 ```
 /usr/local/bin/telegram_notif/
-├── telegram_connection_notif.sh # Script principal de notification
-└── telegram.functions.sh        # Fonctions communes (API et utilitaires)
-
-/etc/telegram/
-├── credentials.cfg              # Identifiants Telegram partagés
-└── telegram_notif.cfg          # Configuration spécifique du système
+└── telegram_wtmp_monitor.sh     # Daemon principal de surveillance
 
 /usr/local/bin/
-├── logger.sh                    # Logger Phips V3 (fichier principal)
-└── phips_logger                 # Lien symbolique vers logger.sh
+└── telegram-wtmp-monitor        # Lien symbolique pour accès rapide
 
-/etc/pam.d/su                   # Configuration PAM pour les notifications su
-/etc/bash.bashrc                # Configuration système pour l'exécution automatique
+/etc/telegram/
+├── credentials.cfg              # Identifiants Telegram
+└── telegram_notif.cfg          # Configuration du monitoring
+
+/etc/systemd/system/
+└── telegram-wtmp-monitor.service # Service systemd
+
+/var/log/telegram_wtmp_monitor.log      # Fichier de logs
+/var/lib/telegram_wtmp_monitor/         # Données du daemon
+/var/run/telegram_wtmp_monitor.pid      # Fichier PID
 ```
 
 ## Configuration Telegram
 
-Le système utilise une configuration Telegram unifiée compatible avec Phips Logger V3.
+Configuration simple et sécurisée pour les notifications Telegram.
 
 **Configuration automatique lors de l'installation :**
-Le script d'installation vous demandera vos identifiants Telegram et créera automatiquement les fichiers de configuration.
+Le script d'installation vous demandera vos identifiants Telegram, les validera et créera automatiquement les fichiers de configuration.
 
 **Configuration manuelle (si nécessaire) :**
 
 **1. Identifiants Telegram :** `/etc/telegram/credentials.cfg`
 ```bash
-# Identifiants Telegram partagés
+# Identifiants Telegram
 BOT_TOKEN="YOUR_BOT_TOKEN_HERE"
 CHAT_ID="YOUR_CHAT_ID_HERE"
 
-# Export des variables pour compatibilité
+# Export des variables
 export BOT_TOKEN CHAT_ID
 ```
 
-**2. Configuration spécifique :** `/etc/telegram/telegram_notif.cfg`
+**2. Configuration monitoring :** `/etc/telegram/telegram_notif.cfg`
 ```bash
-# Configuration pour le logger Phips
-TELEGRAM_NOTIFICATION_LEVEL="WARNING"
-TELEGRAM_MESSAGE_FORMAT="simple"
+# Configuration pour le monitoring WTMP
+CHECK_INTERVAL=5                    # Intervalle de vérification en secondes
+MAX_ENTRIES=50                      # Nombre maximum d'entrées à vérifier
+CURL_TIMEOUT=10                     # Timeout pour les requêtes HTTP
+DATE_FORMAT="%Y-%m-%d %H:%M:%S"     # Format de date
 
-# Configuration pour telegram_notif
-CURL_TIMEOUT=10
-DATE_FORMAT="%Y-%m-%d %H:%M:%S"
-
-# Options de performance (pour éviter les lags de connexion)
+# Options de performance
 SKIP_PUBLIC_IP="false"  # Mettre à "true" pour désactiver la récupération IP publique
 
 # Export des variables
@@ -126,98 +126,116 @@ sudo chmod 600 /etc/telegram/credentials.cfg
 sudo chmod 644 /etc/telegram/telegram_notif.cfg
 ```
 
-## ⚡ Optimisations de performance
+## 🔧 Gestion du service
 
-### 🚀 Éviter les lags de connexion
-
-Le script s'exécute automatiquement **en arrière-plan** pour ne pas bloquer vos connexions.
-
-**Options de performance disponibles :**
-
+### Commandes systemd
 ```bash
-# Dans /etc/telegram/credentials.cfg
-SKIP_PUBLIC_IP="true"          # Désactive la récupération IP publique
-export SKIP_PUBLIC_IP
+# Démarrer le service
+sudo systemctl start telegram-wtmp-monitor
+
+# Arrêter le service
+sudo systemctl stop telegram-wtmp-monitor
+
+# Redémarrer le service
+sudo systemctl restart telegram-wtmp-monitor
+
+# Voir le statut
+sudo systemctl status telegram-wtmp-monitor
+
+# Activer au démarrage (déjà fait par l'installation)
+sudo systemctl enable telegram-wtmp-monitor
 ```
 
-### 🔧 Configuration recommandée pour serveurs lents
-
+### Commandes manuelles
 ```bash
-# Configuration optimale pour éviter tout lag
-TELEGRAM_BOT_TOKEN="YOUR_TOKEN"
-TELEGRAM_CHAT_ID="YOUR_CHAT_ID"
-SKIP_PUBLIC_IP="true"           # Performance maximale
-CURL_TIMEOUT=5                  # Timeout réduit
+# Utiliser le lien symbolique
+telegram-wtmp-monitor {start|stop|restart|status|test}
 
-export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID SKIP_PUBLIC_IP CURL_TIMEOUT
+# Ou directement
+/usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh {start|stop|restart|status|test}
+```
+
+### Logs et monitoring
+```bash
+# Voir les logs en temps réel
+sudo journalctl -u telegram-wtmp-monitor -f
+
+# Voir les logs du daemon
+sudo tail -f /var/log/telegram_wtmp_monitor.log
+
+# Vérifier le processus
+ps aux | grep telegram_wtmp_monitor
 ```
 
 ## 📱 Exemple de notification
 
 ```
-🔔 Connexion Console Proxmox
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 2025-07-08 12:00:30
+🔔 Nouvelle connexion SSH
+
+📅 2025-07-08 18:05:30
+───────────────────────────────
+Connexion sur la machine :
 👤 Utilisateur: phips
-💻 Hôte: proxmox-server
-📺 Terminal: /dev/pts/0
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌐 IP Locale: 192.168.1.100
-📍 IP Source: 192.168.1.50
+💻 Hôte: server-01
+🏠 IP Locale: 192.168.1.100
+───────────────────────────────
+Connexion depuis :
+📡 IP Source: 192.168.1.50
 🌍 IP Publique: 203.0.113.1
+───────────────────────────────
+📺 Terminal: pts/0
 👥 Sessions actives: 2
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ## 🔍 Types de connexion détectés
 
-| Type | Description | IP Source |
+| Type | Description | Détection |
 |------|-------------|----------|
-| 🔐 **SSH** | Connexions SSH standard | IP réelle du client |
-| 🔐 **SSH (legacy)** | Anciennes versions SSH | IP réelle du client |
-| 🖥️ **Console Proxmox** | Interface web Proxmox | IP depuis logs pveproxy |
-| 📺 **Console Web** | Autres interfaces web | "Web Interface" |
-| 💻 **Console Locale** | Accès direct serveur | "Local" |
-| 📱 **Screen/Tmux** | Sessions persistantes | "Local" |
-| 🔄 **su/sudo** | Changement utilisateur | "Local" |
-| ⚙️ **Non-interactif** | Scripts, cron, etc. | "Système" |
+| 🔐 **SSH** | Connexions SSH (toutes versions) | Via wtmp - pts/* |
+| 🖥️ **Console** | Console locale (tty) | Via wtmp - tty* |
+| 📺 **GUI** | Sessions graphiques X11 | Via wtmp - :* |
+| 💻 **Login** | Connexions directes | Via wtmp - console |
+| 🔄 **su/sudo** | Changements d'utilisateur | Via wtmp automatique |
+| 📱 **Sessions** | Screen/Tmux/autres | Détectées dans wtmp |
 
-## 🔒 Avantages sécurité
+## 🚀 Avantages de cette approche
 
-- ✅ **Surveillance complète** de tous les accès
-- ✅ **Traçabilité précise** des connexions
-- ✅ **Détection Proxmox** avec IP source réelle
-- ✅ **Logs centralisés** avec Phips Logger
-- ✅ **Notifications instantanées** sur Telegram
-- ✅ **Informations détaillées** (terminal, sessions)
+- ✅ **Source unique** : wtmp contient toutes les connexions système
+- ✅ **Fiabilité** : Pas de faux positifs ou de connexions manquées
+- ✅ **Performance** : Daemon léger avec surveillance efficace
+- ✅ **Simplicité** : Aucune configuration complexe requise
+- ✅ **Compatibilité** : Fonctionne sur tous les systèmes Linux
+- ✅ **Maintenance** : Architecture simple et robuste
 
 ## 🧪 Test et validation
 
 ### Tester le système
 
-**1. Tester la configuration :**
+**1. Test de configuration :**
 ```bash
-# Vérifier que le logger est installé
-ls -la /usr/local/bin/phips_logger
-ls -la /usr/local/bin/logger.sh
+# Tester la notification Telegram
+sudo telegram-wtmp-monitor test
 
-# Vérifier la configuration Telegram
+# Vérifier la configuration
 ls -la /etc/telegram/credentials.cfg
 ls -la /etc/telegram/telegram_notif.cfg
 ```
 
-**2. Tester manuellement :**
+**2. Vérifier le service :**
 ```bash
-# Exécuter le script de notification en mode test
-sudo /usr/local/bin/telegram_notif/telegram_connection_notif.sh --test
+# Statut du service
+sudo systemctl status telegram-wtmp-monitor
 
 # Vérifier la version
-/usr/local/bin/telegram_notif/telegram_connection_notif.sh --version
+telegram-wtmp-monitor --version
 ```
 
 **3. Tester une nouvelle connexion :**
 ```bash
-# Ouvrir une nouvelle session SSH ou console
+# Ouvrir une nouvelle session SSH
+ssh user@server
+
+# Ou se connecter en console
 # Vous devriez recevoir une notification Telegram
 ```
 
@@ -225,28 +243,26 @@ sudo /usr/local/bin/telegram_notif/telegram_connection_notif.sh --test
 
 **Problème : Pas de notification reçue**
 ```bash
-# Vérifier les logs
-sudo journalctl -f | grep telegram
+# Vérifier les logs du service
+sudo journalctl -u telegram-wtmp-monitor -f
 
-# Vérifier la configuration
-sudo cat /etc/telegram/credentials.cfg
+# Vérifier les logs du daemon
+sudo tail -f /var/log/telegram_wtmp_monitor.log
 
 # Tester la connectivité Telegram
 curl -s "https://api.telegram.org/bot<YOUR_TOKEN>/getMe"
 ```
 
-**Problème : Logger non trouvé**
+**Problème : Service non démarré**
 ```bash
-# Vérifier la présence du logger
-ls -la /usr/local/bin/phips_logger
-ls -la /usr/local/bin/logger.sh
+# Redémarrer le service
+sudo systemctl restart telegram-wtmp-monitor
 
-# Réinstaller le logger si nécessaire
-cd /tmp
-git clone https://github.com/Phips02/Phips_logger_v3.git
-cd Phips_logger_v3
-chmod +x install.sh
-sudo ./install.sh
+# Vérifier les erreurs
+sudo systemctl status telegram-wtmp-monitor
+
+# Vérifier les permissions wtmp
+ls -la /var/log/wtmp
 ```
 
 **Problème : Permissions**
@@ -254,91 +270,51 @@ sudo ./install.sh
 # Corriger les permissions
 sudo chmod 600 /etc/telegram/credentials.cfg
 sudo chmod 644 /etc/telegram/telegram_notif.cfg
-sudo chmod +x /usr/local/bin/telegram_notif/telegram_connection_notif.sh
-sudo chmod +x /usr/local/bin/telegram_notif/telegram.functions.sh
+sudo chmod +x /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh
 ```
 
-## Mise à jour
+## 🔄 Mise à jour
 
-Pour mettre à jour le système de notification, vous pouvez soit réexécuter le script d'installation, soit effectuer une mise à jour manuelle.
+Pour mettre à jour le système, réexécutez simplement le script d'installation :
 
-### Méthode 1 : Réinstallation complète (recommandée)
 ```bash
-# Se connecter en root
-su -
-
-# Réexécuter l'installation (conserve la configuration existante)
+# Télécharger et exécuter la dernière version
 cd /tmp
-wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_telegram_notif.sh
-chmod +x install_telegram_notif.sh
-./install_telegram_notif.sh
+wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_wtmp_notif.sh
+chmod +x install_wtmp_notif.sh
+sudo ./install_wtmp_notif.sh
 ```
 
-### Méthode 2 : Mise à jour manuelle
-```bash
-# Se connecter en root
-su -
+Le script conservera automatiquement votre configuration existante.
 
-# Télécharger les derniers scripts
-cd /tmp
-rm -rf telegram_notif
-git clone https://github.com/Phips02/telegram_notif.git
-cd telegram_notif
+## ⚙️ Compatibilité
 
-# Copier les nouveaux scripts
-cp telegram_connection_notif.sh /usr/local/bin/telegram_notif/
-cp telegram.functions.sh /usr/local/bin/telegram_notif/
-
-# Appliquer les permissions
-chmod +x /usr/local/bin/telegram_notif/telegram_connection_notif.sh
-chmod +x /usr/local/bin/telegram_notif/telegram.functions.sh
-
-# Nettoyer
-cd /tmp
-rm -rf telegram_notif
-
-echo "Mise à jour terminée !"
-```
-
-## ⚠️ Compatibilité et notes importantes
-
-- **Système supporté :** Debian/Ubuntu (testé sur Debian 11/12, Ubuntu 20.04/22.04)
-- **Proxmox :** Compatible avec Proxmox VE 7.x et 8.x
+- **Systèmes supportés :** Debian/Ubuntu (toutes versions récentes)
 - **Architecture :** x86_64 (AMD64)
-- **Prérequis :** bash, curl, wget (installés automatiquement)
-- **Droits :** Installation en tant que root obligatoire
+- **Prérequis :** curl, last (installés automatiquement)
+- **Permissions :** Accès root requis pour /var/log/wtmp
 
-**Migration depuis les anciennes versions :**
-Si vous avez une ancienne version installée, le script d'installation détectera et migrera automatiquement votre configuration.
+## 📜 Licence
 
-## Licence
-Ce projet est sous licence GNU GPLv3 - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+Ce projet est sous licence GNU GPLv3.
 
-Cette licence :
-- Permet l'utilisation privée
-- Permet la modification
-- Oblige le partage des modifications sous la même licence
-- Interdit l'utilisation commerciale fermée
-- Oblige à partager le code source 
+## 🗑️ Désinstallation
 
-## Désinstallation
-
-Pour désinstaller complètement le système de notification (en tant que root) :
+Pour désinstaller complètement le système :
 
 ```bash
-# Se connecter en root
-su -
+# Arrêter et désactiver le service
+sudo systemctl stop telegram-wtmp-monitor
+sudo systemctl disable telegram-wtmp-monitor
+sudo rm /etc/systemd/system/telegram-wtmp-monitor.service
+sudo systemctl daemon-reload
 
-# Supprimer la configuration dans bash.bashrc et PAM
-sed -i '/telegram_notif/d' /etc/bash.bashrc
-sed -i '/telegram_connection_notif/d' /etc/pam.d/su
-
-# Supprimer les fichiers et répertoires
-rm -rf /etc/telegram/
-rm -rf /usr/local/bin/telegram_notif/
-
-# Optionnel : supprimer le logger Phips si non utilisé ailleurs
-# rm -rf /usr/local/bin/phips_logger/
+# Supprimer les fichiers
+sudo rm -rf /usr/local/bin/telegram_notif/
+sudo rm -f /usr/local/bin/telegram-wtmp-monitor
+sudo rm -rf /etc/telegram/
+sudo rm -f /var/log/telegram_wtmp_monitor.log
+sudo rm -rf /var/lib/telegram_wtmp_monitor/
 
 echo "Désinstallation terminée !"
-``` 
+```

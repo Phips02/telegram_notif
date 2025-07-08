@@ -1,0 +1,579 @@
+#!/bin/bash
+
+###############################################################################
+# Telegram WTMP Monitor - Daemon de surveillance des connexions
+# Version 5.0 - Approche simplifiée basée sur wtmp
+###############################################################################
+
+# Version du système
+TELEGRAM_VERSION="5.0"
+
+# Configuration par défaut
+SCRIPT_NAME="telegram_wtmp_monitor"
+PID_FILE="/var/run/${SCRIPT_NAME}.pid"
+LOG_FILE="/var/log/${SCRIPT_NAME}.log"
+LAST_CHECK_FILE="/var/lib/${SCRIPT_NAME}/last_check"
+CHECK_INTERVAL=5
+MAX_ENTRIES=50
+
+# Configuration de performance
+SKIP_PUBLIC_IP="${SKIP_PUBLIC_IP:-true}"  # Désactivé par défaut pour éviter les lags
+CURL_TIMEOUT="${CURL_TIMEOUT:-10}"
+DATE_FORMAT="${DATE_FORMAT:-%Y-%m-%d %H:%M:%S}"
+
+# Fonction de logging
+log_message() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date "+$DATE_FORMAT")
+    echo "[$timestamp] [$level] [$SCRIPT_NAME] $message" | tee -a "$LOG_FILE"
+}
+
+log_info() { log_message "INFO" "$1"; }
+log_error() { log_message "ERROR" "$1"; }
+log_debug() { log_message "DEBUG" "$1"; }
+
+# Fonction pour vérifier la sécurité des fichiers de configuration
+check_config_security() {
+    local credentials_file="/etc/telegram/credentials.cfg"
+    
+    # Vérifier l'existence et les permissions du fichier credentials
+    if [ ! -f "$credentials_file" ]; then
+        log_error "Fichier credentials non trouvé: $credentials_file"
+        return 1
+    fi
+    
+    # Vérifier les permissions (doit être 600)
+    local perms=$(stat -c "%a" "$credentials_file" 2>/dev/null)
+    if [ "$perms" != "600" ]; then
+        log_error "SÉCURITÉ: Permissions incorrectes sur $credentials_file (actuel: $perms, requis: 600)"
+        log_error "Corrigez avec: sudo chmod 600 $credentials_file"
+        return 1
+    fi
+    
+    # Vérifier le propriétaire (doit être root:root)
+    local owner=$(stat -c "%U:%G" "$credentials_file" 2>/dev/null)
+    if [ "$owner" != "root:root" ]; then
+        log_error "SÉCURITÉ: Propriétaire incorrect sur $credentials_file (actuel: $owner, requis: root:root)"
+        log_error "Corrigez avec: sudo chown root:root $credentials_file"
+        return 1
+    fi
+    
+    log_debug "Sécurité des fichiers de configuration validée"
+    return 0
+}
+
+# Fonction pour charger la configuration
+load_config() {
+    # Vérifier la sécurité des fichiers de configuration
+    if ! check_config_security; then
+        log_error "Échec de la vérification de sécurité - arrêt du daemon"
+        exit 1
+    fi
+    
+    # Charger les identifiants Telegram
+    if [ ! -r "/etc/telegram/credentials.cfg" ]; then
+        log_error "Identifiants Telegram non trouvés: /etc/telegram/credentials.cfg"
+        exit 1
+    fi
+    source "/etc/telegram/credentials.cfg"
+
+    # Charger la configuration spécifique
+    if [ -r "/etc/telegram/telegram_notif.cfg" ]; then
+        source "/etc/telegram/telegram_notif.cfg"
+    fi
+
+    # Vérifier les variables essentielles
+    if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+        log_error "BOT_TOKEN ou CHAT_ID non défini"
+        exit 1
+    fi
+
+    log_info "Configuration chargée avec succès"
+}
+
+# Fonction d'envoi Telegram simplifiée
+telegram_send() {
+    local message="$1"
+    local api_url="https://api.telegram.org/bot${BOT_TOKEN}/sendMessage"
+    
+    # Nettoyer le message
+    message=$(echo "$message" | sed 's/[^[:print:][:space:]]//g')
+    
+    # Créer fichier temporaire
+    local temp_file="/tmp/telegram_msg_$$.txt"
+    echo "$message" > "$temp_file"
+    
+    # Tentative d'envoi avec markdown
+    local response=$(curl -s --max-time "$CURL_TIMEOUT" \
+        -X POST \
+        -d "chat_id=${CHAT_ID}" \
+        -d "parse_mode=Markdown" \
+        --data-urlencode "text@${temp_file}" \
+        "$api_url" 2>/dev/null)
+    
+    local success=false
+    if echo "$response" | grep -q '"ok":true'; then
+        success=true
+    else
+        # Tentative sans markdown
+        response=$(curl -s --max-time "$CURL_TIMEOUT" \
+            -X POST \
+            -d "chat_id=${CHAT_ID}" \
+            --data-urlencode "text@${temp_file}" \
+            "$api_url" 2>/dev/null)
+        
+        if echo "$response" | grep -q '"ok":true'; then
+            success=true
+        fi
+    fi
+    
+    # Nettoyer le fichier temporaire
+    rm -f "$temp_file"
+    
+    if [ "$success" = true ]; then
+        log_debug "Message Telegram envoyé avec succès"
+        return 0
+    else
+        log_error "Échec envoi Telegram: $response"
+        return 1
+    fi
+}
+
+# Fonction pour obtenir l'IP publique (optionnelle)
+get_public_ip() {
+    if [ "$SKIP_PUBLIC_IP" = "true" ]; then
+        echo "Désactivé"
+        return
+    fi
+    
+    local public_ip=$(timeout 5 curl -s --max-time 3 \
+        -H "User-Agent: curl/7.68.0" \
+        "https://ipv4.icanhazip.com" 2>/dev/null | head -1)
+    
+    if [ -n "$public_ip" ] && [[ "$public_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        echo "$public_ip"
+    else
+        echo "N/A"
+    fi
+}
+
+# Fonction pour parser une ligne de 'last' (version améliorée)
+parse_last_line() {
+    local line="$1"
+    
+    # Forcer locale C pour un format standardisé
+    export LC_ALL=C
+    
+    # Ignorer les lignes vides, headers et reboots
+    if [[ -z "$line" || "$line" =~ ^wtmp || "$line" =~ ^$ || "$line" =~ ^reboot || "$line" =~ ^shutdown ]]; then
+        return 1
+    fi
+    
+    # Parser avec regex plus robuste
+    if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+(.+)$ ]]; then
+        local user="${BASH_REMATCH[1]}"
+        local terminal="${BASH_REMATCH[2]}"  
+        local host="${BASH_REMATCH[3]}"
+        local rest="${BASH_REMATCH[4]}"
+        
+        # Extraire la partie date (avant "still logged in" ou durée)
+        local datetime=$(echo "$rest" | sed -E 's/[[:space:]]+(still logged in.*|[0-9]+:[0-9]+.*|\([0-9]+:[0-9]+\).*)$//' | xargs)
+        
+        # Validation des champs
+        if [[ -z "$user" || -z "$terminal" || -z "$datetime" ]]; then
+            return 1
+        fi
+        
+        export PARSED_USER="$user"
+        export PARSED_TERMINAL="$terminal"
+        export PARSED_HOST="$host"
+        export PARSED_DATETIME="$datetime"
+        
+        return 0
+    fi
+    
+    return 1
+}
+
+# Fonction pour convertir datetime en timestamp
+datetime_to_timestamp() {
+    local datetime="$1"
+    local timestamp
+    
+    # Forcer locale C pour parsing de date standardisé
+    export LC_ALL=C
+    
+    # Essayer le format standard de last
+    timestamp=$(date -d "$datetime" +%s 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$timestamp" ]; then
+        echo "$timestamp"
+        return 0
+    fi
+    
+    # Essayer avec des formats alternatifs courants
+    for format in "%a %b %d %H:%M:%S %Y" "%Y-%m-%d %H:%M:%S" "%b %d %H:%M"; do
+        timestamp=$(date -d "$datetime" +%s 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$timestamp" ]; then
+            log_debug "Date parsée avec format alternatif: $datetime -> $timestamp"
+            echo "$timestamp"
+            return 0
+        fi
+    done
+    
+    # Si tout échoue, logger l'erreur et utiliser une heure récente
+    log_error "Impossible de parser la date: '$datetime' - utilisation timestamp actuel"
+    date +%s
+    return 1
+}
+
+# Fonction pour créer le message de notification
+create_notification_message() {
+    local user="$1"
+    local terminal="$2"
+    local host="$3"
+    local datetime="$4"
+    
+    # Déterminer le type de connexion
+    local connection_type="Inconnue"
+    if [[ "$terminal" =~ ^pts/ ]]; then
+        connection_type="SSH"
+    elif [[ "$terminal" =~ ^tty ]]; then
+        connection_type="Console"
+    elif [[ "$terminal" =~ ^: ]]; then
+        connection_type="X11/GUI"
+    fi
+    
+    # Informations système
+    local hostname=$(hostname)
+    local local_ip=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "N/A")
+    local public_ip=$(get_public_ip)
+    
+    # Compter les sessions actives
+    local active_sessions=$(who | wc -l)
+    
+    # Construire le message
+    local message="🔔 *Nouvelle connexion $connection_type*
+
+📅 $datetime
+───────────────────────────
+Connexion sur la machine :
+👤 Utilisateur: $user
+💻 Hôte: $hostname
+🏠 IP Locale: $local_ip
+───────────────────────────
+Connexion depuis :
+📡 IP Source: $host
+🌍 IP Publique: $public_ip
+───────────────────────────
+📺 Terminal: $terminal
+👥 Sessions actives: $active_sessions"
+
+    echo "$message"
+}
+
+# Fonction de validation de la configuration
+validate_configuration() {
+    log_info "Validation de la configuration..."
+    
+    # Test du format de sortie de last
+    local test_output=$(LC_ALL=C last -F -w -n 5 2>/dev/null)
+    if [ -z "$test_output" ]; then
+        log_error "Impossible d'exécuter la commande 'last'"
+        return 1
+    fi
+    
+    # Test de parsing sur une ligne réelle
+    local test_parsed=0
+    while IFS= read -r line; do
+        if parse_last_line "$line"; then
+            test_parsed=1
+            log_info "Test parsing OK: $PARSED_USER@$PARSED_TERMINAL"
+            break
+        fi
+    done <<< "$test_output"
+    
+    if [ "$test_parsed" -eq 0 ]; then
+        log_error "Aucune ligne de 'last' n'a pu être parsée - vérifiez le format"
+        return 1
+    fi
+    
+    # Test de conversion timestamp
+    local test_timestamp=$(datetime_to_timestamp "$PARSED_DATETIME")
+    if [ $? -ne 0 ]; then
+        log_error "Problème de conversion timestamp"
+        return 1
+    fi
+    
+    log_info "Configuration validée avec succès"
+    return 0
+}
+
+# Fonction principale de surveillance
+monitor_wtmp() {
+    log_info "Démarrage surveillance WTMP (intervalle: ${CHECK_INTERVAL}s)"
+    
+    # Créer le répertoire de données si nécessaire
+    mkdir -p "$(dirname "$LAST_CHECK_FILE")"
+    
+    # Fichier pour stocker les connexions déjà vues
+    local seen_connections_file="/var/lib/${SCRIPT_NAME}/seen_connections"
+    mkdir -p "$(dirname "$seen_connections_file")"
+    
+    while true; do
+        local current_time=$(date +%s)
+        local new_connections=0
+        
+        # Utiliser last avec limite de temps plutôt que de lignes
+        # -s pour depuis (since) hier pour éviter trop d'historique
+        local yesterday=$(date -d "yesterday" "+%Y-%m-%d %H:%M")
+        
+        # Lire les connexions récentes avec format fixe
+        # CORRECTION BUG CRITIQUE: Utiliser redirection de processus au lieu de pipe
+        # pour éviter le sous-shell qui empêche les variables de remonter
+        while IFS= read -r line; do
+            if parse_last_line "$line"; then
+                # Créer un ID unique pour cette connexion
+                local connection_id="${PARSED_USER}:${PARSED_TERMINAL}:${PARSED_HOST}:${PARSED_DATETIME}"
+                
+                # Créer un hash avec fallback si sha256sum n'est pas disponible
+                local connection_hash
+                if command -v sha256sum >/dev/null 2>&1; then
+                    connection_hash=$(echo "$connection_id" | sha256sum | cut -d' ' -f1)
+                elif command -v md5sum >/dev/null 2>&1; then
+                    connection_hash=$(echo "$connection_id" | md5sum | cut -d' ' -f1)
+                else
+                    # Fallback simple : utiliser un hash basique avec date/PID
+                    connection_hash=$(echo "$connection_id" | od -An -tx1 | tr -d ' \n' | head -c 32)
+                    # Si od échoue aussi, utiliser un ID basé sur timestamp et PID
+                    if [ -z "$connection_hash" ]; then
+                        connection_hash="${current_time}_$$_$(echo "$connection_id" | wc -c)"
+                    fi
+                fi
+                
+                # Vérifier si cette connexion a déjà été traitée
+                if ! grep -q "$connection_hash" "$seen_connections_file" 2>/dev/null; then
+                    local login_timestamp=$(datetime_to_timestamp "$PARSED_DATETIME")
+                    
+                    # Vérifier si c'est vraiment récent (dernières 24h)
+                    local min_timestamp=$((current_time - 86400))
+                    
+                    if [ "$login_timestamp" -gt "$min_timestamp" ]; then
+                        log_info "Nouvelle connexion: $PARSED_USER@$PARSED_TERMINAL depuis $PARSED_HOST à $PARSED_DATETIME"
+                        
+                        # Créer et envoyer la notification
+                        local message=$(create_notification_message "$PARSED_USER" "$PARSED_TERMINAL" "$PARSED_HOST" "$PARSED_DATETIME")
+                        
+                        if telegram_send "$message"; then
+                            log_info "Notification envoyée pour $PARSED_USER@$PARSED_TERMINAL"
+                            # Marquer comme traité
+                            echo "$connection_hash" >> "$seen_connections_file"
+                            new_connections=$((new_connections + 1))
+                        else
+                            log_error "Échec notification pour $PARSED_USER@$PARSED_TERMINAL"
+                        fi
+                    fi
+                fi
+            fi
+        done < <(LC_ALL=C last -F -w -s "$yesterday" 2>/dev/null)
+        
+        # Nettoyer le fichier des connexions vues (garder seulement les 1000 dernières)
+        if [ -f "$seen_connections_file" ]; then
+            tail -1000 "$seen_connections_file" > "${seen_connections_file}.tmp" 2>/dev/null
+            mv "${seen_connections_file}.tmp" "$seen_connections_file" 2>/dev/null
+        fi
+        
+        log_debug "Cycle terminé - $new_connections nouvelles connexions détectées"
+        sleep "$CHECK_INTERVAL"
+    done
+}
+
+# Fonction pour créer le fichier PID
+create_pid_file() {
+    if [ -f "$PID_FILE" ]; then
+        local old_pid=$(cat "$PID_FILE")
+        if kill -0 "$old_pid" 2>/dev/null; then
+            log_error "Le daemon est déjà en cours d'exécution (PID: $old_pid)"
+            exit 1
+        else
+            log_info "Suppression du fichier PID obsolète"
+            rm -f "$PID_FILE"
+        fi
+    fi
+    
+    echo $$ > "$PID_FILE"
+    log_info "Fichier PID créé: $PID_FILE (PID: $$)"
+}
+
+# Fonction de nettoyage
+cleanup() {
+    log_info "Arrêt du daemon en cours..."
+    rm -f "$PID_FILE"
+    exit 0
+}
+
+# Fonction d'aide
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  start       Démarrer le daemon
+  stop        Arrêter le daemon
+  restart     Redémarrer le daemon
+  status      Afficher le statut
+  test        Tester l'envoi d'une notification
+  --version   Afficher la version
+  --help      Afficher cette aide
+
+Fichiers:
+  Configuration: /etc/telegram/credentials.cfg
+  Log: $LOG_FILE
+  PID: $PID_FILE
+EOF
+}
+
+# Fonction pour arrêter le daemon
+stop_daemon() {
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            log_info "Arrêt du daemon (PID: $pid)"
+            kill "$pid"
+            rm -f "$PID_FILE"
+            echo "Daemon arrêté"
+        else
+            log_info "Le daemon n'est pas en cours d'exécution"
+            rm -f "$PID_FILE"
+        fi
+    else
+        echo "Le daemon n'est pas en cours d'exécution"
+    fi
+}
+
+# Fonction pour afficher le statut
+show_status() {
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "Daemon en cours d'exécution (PID: $pid)"
+            echo "Log: $LOG_FILE"
+            echo "Dernières lignes du log:"
+            tail -5 "$LOG_FILE" 2>/dev/null || echo "Aucun log disponible"
+        else
+            echo "Daemon arrêté (fichier PID obsolète)"
+            rm -f "$PID_FILE"
+        fi
+    else
+        echo "Daemon arrêté"
+    fi
+}
+
+# Fonction de test
+test_notification() {
+    log_info "Test de notification Telegram..."
+    load_config
+    
+    local test_message="🧪 *Test Telegram WTMP Monitor*
+
+📅 $(date "+$DATE_FORMAT")
+───────────────────────────
+🔔 Système de notification opérationnel
+💻 Serveur: $(hostname)
+🏠 IP: $(hostname -I | awk '{print $1}')
+📊 Version: $TELEGRAM_VERSION
+───────────────────────────
+✅ Configuration OK
+🚀 Surveillance WTMP active"
+
+    if telegram_send "$test_message"; then
+        echo "✅ Test réussi - Notification envoyée"
+    else
+        echo "❌ Test échoué - Vérifiez la configuration"
+        exit 1
+    fi
+}
+
+# Gestion des signaux
+trap cleanup SIGINT SIGTERM
+
+# Vérifications préalables
+check_requirements() {
+    # Vérifier les permissions root
+    if [[ $EUID -ne 0 ]]; then
+        echo "❌ Ce script doit être exécuté en tant que root"
+        exit 1
+    fi
+    
+    # Vérifier l'accès à wtmp
+    if [ ! -r /var/log/wtmp ]; then
+        echo "❌ Impossible de lire /var/log/wtmp"
+        exit 1
+    fi
+    
+    # Vérifier les commandes nécessaires
+    for cmd in curl last date; do
+        if ! command -v "$cmd" &> /dev/null; then
+            echo "❌ Commande manquante: $cmd"
+            exit 1
+        fi
+    done
+    
+    # Vérifier qu'au moins une méthode de hachage est disponible
+    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v md5sum >/dev/null 2>&1 && ! command -v od >/dev/null 2>&1; then
+        echo "⚠️  Aucune méthode de hachage disponible (sha256sum, md5sum, od)"
+        echo "   Le système utilisera un fallback basique (timestamp + PID)"
+    fi
+    
+    # Créer le répertoire de log
+    mkdir -p "$(dirname "$LOG_FILE")"
+    touch "$LOG_FILE"
+}
+
+# Point d'entrée principal
+main() {
+    case "${1:-start}" in
+        "start")
+            check_requirements
+            load_config
+            
+            # Validation de la configuration
+            if ! validate_configuration; then
+                log_error "Échec de la validation de la configuration - arrêt du daemon"
+                exit 1
+            fi
+            
+            create_pid_file
+            log_info "Démarrage du daemon Telegram WTMP Monitor v$TELEGRAM_VERSION"
+            monitor_wtmp
+            ;;
+        "stop")
+            stop_daemon
+            ;;
+        "restart")
+            stop_daemon
+            sleep 2
+            exec "$0" start
+            ;;
+        "status")
+            show_status
+            ;;
+        "test")
+            check_requirements
+            test_notification
+            ;;
+        "--version")
+            echo "Telegram WTMP Monitor v$TELEGRAM_VERSION"
+            ;;
+        "--help"|"help")
+            show_help
+            ;;
+        *)
+            echo "Usage: $0 {start|stop|restart|status|test|--version|--help}"
+            exit 1
+            ;;
+    esac
+}
+
+# Exécution
+main "$@"
