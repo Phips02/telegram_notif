@@ -296,7 +296,10 @@ create_notification_message() {
             if [ -n "$session_line" ]; then
                 local session_user=$(echo "$session_line" | awk '{print $1}')
                 local session_terminal=$(echo "$session_line" | awk '{print $2}')
-                local session_time=$(echo "$session_line" | awk '{print $3, $4}')
+
+                # Extraire la date et l'heure complètes (colonnes 3, 4 et 5)
+                # Format: 2025-07-08 13:08 (192.168.2.111)
+                local session_time=$(echo "$session_line" | awk '{print $3, $4, $5}')
                 local session_ip=$(echo "$session_line" | grep -o '([^)]*)' | tr -d '()')
                 
                 local type_conn="Autre"
