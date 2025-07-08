@@ -177,8 +177,18 @@ parse_last_line() {
         local host="${BASH_REMATCH[3]}"
         local rest="${BASH_REMATCH[4]}"
         
-        # Extraire la partie date (avant "still logged in" ou durée)
-        local datetime=$(echo "$rest" | sed -E 's/[[:space:]]+(still logged in.*|[0-9]+:[0-9]+.*|\([0-9]+:[0-9]+\).*)$//' | xargs)
+        # Extraire la partie date (avant "still logged in" ou " - ")
+        local datetime
+        if [[ "$rest" =~ ^(.+)[[:space:]]+-[[:space:]]+.* ]]; then
+            # Connexion terminée avec durée : extraire la date de début
+            datetime="${BASH_REMATCH[1]}"
+        elif [[ "$rest" =~ ^(.+)[[:space:]]+still[[:space:]]+logged[[:space:]]+in ]]; then
+            # Connexion active : extraire la date
+            datetime="${BASH_REMATCH[1]}"
+        else
+            # Fallback : prendre tout sauf les parenthèses finales
+            datetime=$(echo "$rest" | sed -E 's/[[:space:]]+\([^)]+\)[[:space:]]*$//' | xargs)
+        fi
         
         # Validation des champs
         if [[ -z "$user" || -z "$terminal" || -z "$datetime" ]]; then
