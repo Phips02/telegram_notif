@@ -201,7 +201,7 @@ monitor_privileges() {
                         echo "$privilege_hash" >> "$CACHE_FILE"
                         
                         # Créer le message de notification
-                        local message="🔐 *Élévation su détectée*
+                        local message="🔐 *Élévation de privilège détectée*
 
 👤 *Utilisateur source* : \`$source_user\` (UID: $source_uid)
 🎯 *Utilisateur cible* : \`$target_user\` (UID: $target_uid)
