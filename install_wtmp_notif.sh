@@ -1,12 +1,12 @@
 #!/bin/bash
 
 ###############################################################################
-# Script d'installation Telegram WTMP Monitor V5.0
+# Script d'installation Telegram WTMP Monitor V5.1
 # Surveillance des connexions serveur via wtmp
 ###############################################################################
 
 # Version du système
-TELEGRAM_VERSION="5.0"
+TELEGRAM_VERSION="5.1"
 SCRIPT_NAME="install_wtmp_notif.sh"
 
 # Couleurs pour l'affichage
@@ -296,6 +296,60 @@ EOF
     log_message "SUCCESS" "Service systemd créé et activé"
 }
 
+# Fonction pour installer le moniteur de privilèges
+install_privilege_monitor() {
+    log_message "INFO" "Installation du moniteur de privilèges..."
+    
+    # Vérifier si le script existe dans le répertoire courant
+    if [ -f "./telegram_privilege_monitor.sh" ]; then
+        log_message "INFO" "Copie du script moniteur de privilèges depuis le répertoire local"
+        cp "./telegram_privilege_monitor.sh" "/usr/local/bin/telegram_notif/"
+        chmod +x "/usr/local/bin/telegram_notif/telegram_privilege_monitor.sh"
+    else
+        log_message "INFO" "Téléchargement du script moniteur de privilèges depuis GitHub"
+        if ! curl -fsSL "https://raw.githubusercontent.com/Phips02/telegram_notif/main/telegram_privilege_monitor.sh" \
+             -o "/usr/local/bin/telegram_notif/telegram_privilege_monitor.sh"; then
+            log_message "ERROR" "Échec du téléchargement du moniteur de privilèges"
+            return 1
+        fi
+        chmod +x "/usr/local/bin/telegram_notif/telegram_privilege_monitor.sh"
+    fi
+    
+    # Créer un lien symbolique pour faciliter l'utilisation
+    ln -sf "/usr/local/bin/telegram_notif/telegram_privilege_monitor.sh" "/usr/local/bin/telegram-privilege-monitor"
+    
+    log_message "SUCCESS" "Moniteur de privilèges installé"
+}
+
+# Fonction pour créer le service systemd du moniteur de privilèges
+create_privilege_service() {
+    if [ "$SYSTEMD_AVAILABLE" != true ]; then
+        log_message "WARNING" "systemd non disponible - service privilèges non créé"
+        return 0
+    fi
+    
+    log_message "INFO" "Création du service systemd pour le moniteur de privilèges..."
+    
+    # Vérifier si le fichier service existe dans le répertoire courant
+    if [ -f "./telegram-privilege-monitor.service" ]; then
+        log_message "INFO" "Copie du service depuis le répertoire local"
+        cp "./telegram-privilege-monitor.service" "/etc/systemd/system/"
+    else
+        log_message "INFO" "Téléchargement du fichier service depuis GitHub"
+        if ! curl -fsSL "https://raw.githubusercontent.com/Phips02/telegram_notif/main/telegram-privilege-monitor.service" \
+             -o "/etc/systemd/system/telegram-privilege-monitor.service"; then
+            log_message "ERROR" "Échec du téléchargement du service privilèges"
+            return 1
+        fi
+    fi
+    
+    # Recharger systemd et activer le service
+    systemctl daemon-reload
+    systemctl enable telegram-privilege-monitor.service
+    
+    log_message "SUCCESS" "Service moniteur de privilèges créé et activé"
+}
+
 # Fonction pour effectuer un test final
 final_test() {
     log_message "INFO" "Test final du système..."
@@ -317,27 +371,43 @@ final_test() {
     fi
 }
 
-# Fonction pour démarrer le service
+# Fonction pour démarrer les services
 start_service() {
-    log_message "INFO" "Démarrage du service..."
+    log_message "INFO" "Démarrage des services..."
     
     if [ "$SYSTEMD_AVAILABLE" = true ]; then
+        # Démarrer le service WTMP
         if systemctl start telegram-wtmp-monitor.service; then
-            log_message "SUCCESS" "Service démarré via systemd"
-            
-            # Afficher le statut
-            sleep 2
-            systemctl status telegram-wtmp-monitor.service --no-pager -l
+            log_message "SUCCESS" "Service WTMP démarré via systemd"
         else
-            log_message "ERROR" "Échec du démarrage du service systemd"
-            log_message "INFO" "Démarrage manuel..."
+            log_message "ERROR" "Échec du démarrage du service WTMP systemd"
+            log_message "INFO" "Démarrage manuel WTMP..."
             /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh start &
         fi
+        
+        # Démarrer le service de privilèges
+        if systemctl start telegram-privilege-monitor.service; then
+            log_message "SUCCESS" "Service privilèges démarré via systemd"
+        else
+            log_message "ERROR" "Échec du démarrage du service privilèges systemd"
+            log_message "INFO" "Démarrage manuel privilèges..."
+            /usr/local/bin/telegram_notif/telegram_privilege_monitor.sh start &
+        fi
+        
+        # Afficher le statut des services
+        sleep 2
+        echo ""
+        log_message "INFO" "Statut des services :"
+        systemctl status telegram-wtmp-monitor.service --no-pager -l
+        echo ""
+        systemctl status telegram-privilege-monitor.service --no-pager -l
     else
-        log_message "INFO" "Démarrage manuel du daemon..."
+        log_message "INFO" "Démarrage manuel des daemons..."
         /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh start &
+        /usr/local/bin/telegram_notif/telegram_privilege_monitor.sh start &
         sleep 2
         /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh status
+        /usr/local/bin/telegram_notif/telegram_privilege_monitor.sh status
     fi
 }
 
@@ -360,6 +430,8 @@ main() {
     install_scripts
     create_config_files
     create_systemd_service
+    install_privilege_monitor
+    create_privilege_service
     final_test
     start_service
     
@@ -369,25 +441,32 @@ main() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "📁 Fichiers installés :"
-    echo "   • Script daemon : /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh"
-    echo "   • Lien rapide : /usr/local/bin/telegram-wtmp-monitor"
+    echo "   • Script WTMP : /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh"
+    echo "   • Script privilèges : /usr/local/bin/telegram_notif/telegram_privilege_monitor.sh"
+    echo "   • Liens rapides : /usr/local/bin/telegram-wtmp-monitor | telegram-privilege-monitor"
     echo "   • Configuration : /etc/telegram/"
-    echo "   • Logs : /var/log/telegram_wtmp_monitor.log"
+    echo "   • Logs : /var/log/telegram_wtmp_monitor.log | telegram_privilege_monitor.log"
     echo ""
     echo "🔧 Commandes utiles :"
-    echo "   • Statut : systemctl status telegram-wtmp-monitor"
-    echo "   • Logs : journalctl -u telegram-wtmp-monitor -f"
+    echo "   • Statut WTMP : systemctl status telegram-wtmp-monitor"
+    echo "   • Statut privilèges : systemctl status telegram-privilege-monitor"
+    echo "   • Logs WTMP : journalctl -u telegram-wtmp-monitor -f"
+    echo "   • Logs privilèges : journalctl -u telegram-privilege-monitor -f"
     echo "   • Manuel : telegram-wtmp-monitor {start|stop|restart|status|test}"
+    echo "   • Manuel : telegram-privilege-monitor {start|stop|restart|status|test}"
     echo ""
     echo "🚀 Fonctionnalités :"
-    echo "   ✅ Surveillance unifiée via wtmp"
-    echo "   ✅ Détection fiable de toutes les connexions"
-    echo "   ✅ Service systemd intégré"
+    echo "   ✅ Surveillance connexions via wtmp"
+    echo "   ✅ Surveillance élévations de privilèges via journalctl"
+    echo "   ✅ Détection SSH, console, su, sudo"
+    echo "   ✅ Services systemd intégrés"
     echo "   ✅ Notifications Telegram en temps réel"
     echo "   ✅ Interface de gestion complète"
     echo ""
-    echo "🔔 Le système surveille maintenant toutes les connexions via wtmp !"
-    echo "   Testez en vous connectant via SSH ou console."
+    echo "🔔 Le système surveille maintenant :"
+    echo "   • Connexions SSH/console via wtmp"
+    echo "   • Élévations su/sudo via journalctl"
+    echo "   Testez en vous connectant ou en utilisant su/sudo."
     echo ""
 }
 

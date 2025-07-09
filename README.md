@@ -1,33 +1,41 @@
 # 🔔 Telegram WTMP Monitor
-Version 5.0 - Surveillance des connexions serveur
+Version 5.1 - Surveillance complète des connexions et privilèges
 
 ## 🎯 À propos
 
-Système de surveillance des connexions serveur basé sur **wtmp** pour recevoir des notifications Telegram lors de **toutes les connexions** :
+Système de surveillance complet pour recevoir des notifications Telegram lors de :
 
-- 🔐 **Connexions SSH** (toutes versions)
+### 🔌 **Connexions (via wtmp)**
+- 🔑 **Connexions SSH** (toutes versions)
 - 🖥️ **Console locale** (tty, pts)
 - 📺 **Interface graphique** (X11, sessions GUI)
-- 💻 **Connexions système** (su, sudo, login)
-- 📱 **Sessions utilisateur** (screen, tmux détectées automatiquement)
+- 💻 **Sessions utilisateur** (screen, tmux détectées automatiquement)
 
-## 🚀 Fonctionnalités V5.0
+### 🔐 **Élévations de privilèges (via journalctl)**
+- 🔐 **Commandes su** (changement d'utilisateur)
+- ⚡ **Commandes sudo** (exécution privilégiée)
+- 🔑 **Sessions PAM** (ouverture/fermeture)
 
-- ✅ **Surveillance unifiée** via fichier wtmp système
-- ✅ **Daemon robuste** avec gestion PID et logs
-- ✅ **Service systemd** intégré pour démarrage automatique
+## 🚀 Fonctionnalités V5.1
+
+- ✅ **Double surveillance** : wtmp + journalctl
+- ✅ **Daemons robustes** avec gestion PID et logs
+- ✅ **Services systemd** intégrés pour démarrage automatique
 - ✅ **Détection fiable** sans faux positifs
 - ✅ **Notifications temps réel** avec informations complètes
 - ✅ **Interface de gestion** complète (start/stop/status/test)
 - ✅ **Configuration flexible** et sécurisée
+- ✅ **Anti-doublons** avec système de cache intelligent
 
 ## 📁 Fichiers du projet
 
 | Fichier | Description |
 |---------|-------------|
 | `install_wtmp_notif.sh` | Script d'installation automatique |
-| `telegram_wtmp_monitor.sh` | Daemon principal de surveillance |
-| `telegram-wtmp-monitor.service` | Service systemd |
+| `telegram_wtmp_monitor.sh` | Daemon surveillance connexions (wtmp) |
+| `telegram_privilege_monitor.sh` | Daemon surveillance privilèges (journalctl) |
+| `telegram-wtmp-monitor.service` | Service systemd pour connexions |
+| `telegram-privilege-monitor.service` | Service systemd pour privilèges |
 | `credentials_example.cfg` | Exemple configuration identifiants Telegram |
 | `telegram_notif_example.cfg` | Exemple configuration système |
 | `README.md` | Documentation complète |
@@ -68,21 +76,28 @@ sudo ./install_wtmp_notif.sh
 ## Structure des fichiers
 ```
 /usr/local/bin/telegram_notif/
-└── telegram_wtmp_monitor.sh     # Daemon principal de surveillance
+├── telegram_wtmp_monitor.sh         # Daemon surveillance connexions
+└── telegram_privilege_monitor.sh    # Daemon surveillance privilèges
 
 /usr/local/bin/
-└── telegram-wtmp-monitor        # Lien symbolique pour accès rapide
+├── telegram-wtmp-monitor            # Lien symbolique connexions
+└── telegram-privilege-monitor       # Lien symbolique privilèges
 
 /etc/telegram/
-├── credentials.cfg              # Identifiants Telegram
-└── telegram_notif.cfg          # Configuration du monitoring
+├── credentials.cfg                  # Identifiants Telegram (partagés)
+└── telegram_notif.cfg              # Configuration du monitoring
 
 /etc/systemd/system/
-└── telegram-wtmp-monitor.service # Service systemd
+├── telegram-wtmp-monitor.service    # Service systemd connexions
+└── telegram-privilege-monitor.service # Service systemd privilèges
 
-/var/log/telegram_wtmp_monitor.log      # Fichier de logs
-/var/lib/telegram_wtmp_monitor/         # Données du daemon
-/var/run/telegram_wtmp_monitor.pid      # Fichier PID
+# Logs et données
+/var/log/telegram_wtmp_monitor.log       # Logs connexions
+/var/log/telegram_privilege_monitor.log  # Logs privilèges
+/var/lib/telegram_wtmp_monitor/          # Données daemon connexions
+/var/lib/telegram_privilege_monitor/     # Données daemon privilèges
+/var/run/telegram_wtmp_monitor.pid       # PID connexions
+/var/run/telegram_privilege_monitor.pid  # PID privilèges
 ```
 
 ## Configuration Telegram
@@ -126,77 +141,151 @@ sudo chmod 600 /etc/telegram/credentials.cfg
 sudo chmod 644 /etc/telegram/telegram_notif.cfg
 ```
 
-## 🔧 Gestion du service
+## 🔧 Gestion des services
 
 ### Commandes systemd
 ```bash
-# Démarrer le service
+# === SERVICE CONNEXIONS ===
+# Démarrer le service connexions
 sudo systemctl start telegram-wtmp-monitor
 
-# Arrêter le service
+# Arrêter le service connexions
 sudo systemctl stop telegram-wtmp-monitor
 
-# Redémarrer le service
-sudo systemctl restart telegram-wtmp-monitor
-
-# Voir le statut
+# Voir le statut connexions
 sudo systemctl status telegram-wtmp-monitor
 
-# Activer au démarrage (déjà fait par l'installation)
-sudo systemctl enable telegram-wtmp-monitor
+# === SERVICE PRIVILÈGES ===
+# Démarrer le service privilèges
+sudo systemctl start telegram-privilege-monitor
+
+# Arrêter le service privilèges
+sudo systemctl stop telegram-privilege-monitor
+
+# Voir le statut privilèges
+sudo systemctl status telegram-privilege-monitor
+
+# === GESTION GLOBALE ===
+# Démarrer les deux services
+sudo systemctl start telegram-wtmp-monitor telegram-privilege-monitor
+
+# Arrêter les deux services
+sudo systemctl stop telegram-wtmp-monitor telegram-privilege-monitor
+
+# Redémarrer les deux services
+sudo systemctl restart telegram-wtmp-monitor telegram-privilege-monitor
 ```
 
 ### Commandes manuelles
 ```bash
+# === CONNEXIONS ===
 # Utiliser le lien symbolique
-telegram-wtmp-monitor {start|stop|restart|status|test}
+telegram-wtmp-monitor {start|stop|restart|status|test|debug}
 
 # Ou directement
-/usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh {start|stop|restart|status|test}
+/usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh {start|stop|restart|status|test|debug}
+
+# === PRIVILÈGES ===
+# Utiliser le lien symbolique
+telegram-privilege-monitor {start|stop|restart|status|test|debug}
+
+# Ou directement
+/usr/local/bin/telegram_notif/telegram_privilege_monitor.sh {start|stop|restart|status|test|debug}
 ```
 
 ### Logs et monitoring
 ```bash
-# Voir les logs en temps réel
+# === LOGS CONNEXIONS ===
+# Voir les logs systemd connexions
 sudo journalctl -u telegram-wtmp-monitor -f
 
-# Voir les logs du daemon
+# Voir les logs daemon connexions
 sudo tail -f /var/log/telegram_wtmp_monitor.log
+
+# === LOGS PRIVILÈGES ===
+# Voir les logs systemd privilèges
+sudo journalctl -u telegram-privilege-monitor -f
+
+# Voir les logs daemon privilèges
+sudo tail -f /var/log/telegram_privilege_monitor.log
+
+# === LOGS COMBINÉS ===
+# Voir tous les logs en temps réel
+sudo journalctl -u telegram-wtmp-monitor -u telegram-privilege-monitor -f
 
 # Vérifier le processus
 ps aux | grep telegram_wtmp_monitor
 ```
 
-## 📱 Exemple de notification
+## 📱 Exemples de notifications
 
+### 🔑 Notification de connexion SSH
 ```
-🔔 Nouvelle connexion SSH
+🔑 *Nouvelle connexion SSH*
 
-📅 2025-07-08 18:05:30
-───────────────────────────────
-Connexion sur la machine :
-👤 Utilisateur: phips
-💻 Hôte: server-01
-🏠 IP Locale: 192.168.1.100
-───────────────────────────────
-Connexion depuis :
-📡 IP Source: 192.168.1.50
-🌍 IP Publique: 203.0.113.1
-───────────────────────────────
-📺 Terminal: pts/0
-👥 Sessions actives: 2
+👤 **Utilisateur:** `phips`
+💻 **Terminal:** `pts/0`
+🌐 **IP Source:** `192.168.1.50`
+🖥️ **Serveur:** `server-01`
+⏰ **Heure:** `2025-07-09 11:42:01`
+
+───────────────────────────
+📈 **Sessions actives:**
+• SSH (pts/0) depuis 192.168.1.50 à 11:42:01
+• SSH (pts/1) depuis 192.168.1.51 à 10:30:15
 ```
 
-## 🔍 Types de connexion détectés
+### 🔐 Notification d'élévation de privilèges
+```
+🔐 *Élévation su détectée*
 
-| Type | Description | Détection |
-|------|-------------|----------|
-| 🔐 **SSH** | Connexions SSH (toutes versions) | Via wtmp - pts/* |
-| 🖥️ **Console** | Console locale (tty) | Via wtmp - tty* |
-| 📺 **GUI** | Sessions graphiques X11 | Via wtmp - :* |
-| 💻 **Login** | Connexions directes | Via wtmp - console |
-| 🔄 **su/sudo** | Changements d'utilisateur | Via wtmp automatique |
-| 📱 **Sessions** | Screen/Tmux/autres | Détectées dans wtmp |
+👤 **Utilisateur source:** `phips`
+🎯 **Utilisateur cible:** `root`
+💻 **Terminal:** `pts/1`
+🌐 **Source IP:** `192.168.1.50`
+🖥️ **Serveur:** `server-01`
+⏰ **Heure:** `2025-07-09 11:42:01`
+
+───────────────────────────
+📈 **Détails système:**
+• Événement: su
+• Timestamp journal: jui 09 11:42:01
+```
+
+### ⚡ Notification de commande sudo
+```
+⚡ *Commande sudo détectée*
+
+👤 **Utilisateur source:** `phips`
+🎯 **Utilisateur cible:** `root`
+💻 **Terminal:** `pts/1`
+🌐 **Source IP:** `192.168.1.50`
+🖥️ **Serveur:** `server-01`
+⏰ **Heure:** `2025-07-09 11:45:30`
+
+───────────────────────────
+📈 **Détails système:**
+• Événement: sudo
+• Timestamp journal: jui 09 11:45:30
+```
+
+## 🔍 Types d'événements détectés
+
+### 🔌 Connexions (via wtmp)
+| Type | Icône | Description | Détection |
+|------|------|-------------|----------|
+| **SSH** | 🔑 | Connexions SSH (toutes versions) | Via wtmp - pts/* avec IP |
+| **Console Proxmox** | 📺 | Console locale (tty) | Via wtmp - tty* |
+| **Élévation su** | 🔐 | Su via terminal SSH | Via wtmp - pts/* sans IP |
+| **GUI/X11** | 💻 | Sessions graphiques | Via wtmp - :* |
+| **Login direct** | 🖥️ | Connexions console | Via wtmp - console |
+
+### 🔐 Élévations de privilèges (via journalctl)
+| Type | Icône | Description | Détection |
+|------|------|-------------|----------|
+| **Commande su** | 🔐 | Changement d'utilisateur | `su[PID]: (to user) source on pts/X` |
+| **Commande sudo** | ⚡ | Exécution privilégiée | `sudo[PID]: user : TTY=pts/X ; USER=root` |
+| **Session PAM** | 🔑 | Ouverture session su | `pam_unix(su-l:session): session opened` |
 
 ## 🚀 Avantages de cette approche
 

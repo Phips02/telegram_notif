@@ -2,11 +2,11 @@
 
 ###############################################################################
 # Telegram WTMP Monitor - Daemon de surveillance des connexions
-# Version 5.0 - Approche simplifiée basée sur wtmp
+# Version 5.1 - Approche simplifiée basée sur wtmp
 ###############################################################################
 
 # Version du système
-TELEGRAM_VERSION="5.0"
+TELEGRAM_VERSION="5.1"
 
 # Configuration par défaut
 SCRIPT_NAME="telegram_wtmp_monitor"
