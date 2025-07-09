@@ -183,18 +183,19 @@ parse_last_line() {
             datetime="${BASH_REMATCH[1]}"
             is_active=true
         elif [[ "$rest" =~ ^(.+)[[:space:]]+-[[:space:]]+.* ]]; then
-            # Connexion terminée : vérifier si elle est très récente (moins de 2 minutes)
-            datetime="${BASH_REMATCH[1]}"
-            local current_time=$(date +%s)
-            local connection_time=$(date -d "$datetime" +%s 2>/dev/null || echo 0)
-            
-            # Ignorer les connexions terminées depuis plus de 2 minutes
-            if [ $((current_time - connection_time)) -gt 120 ]; then
-                return 1
-            fi
+            # Connexion terminée : ignorer complètement les déconnexions
+            return 1
         else
             # Fallback : prendre tout sauf les parenthèses finales
             datetime=$(echo "$rest" | sed -E 's/[[:space:]]+\([^)]+\)[[:space:]]*$//' | xargs)
+            
+            # Vérifier si c'est une déconnexion dans le fallback (version améliorée)
+            if [[ "$rest" =~ [[:space:]]-[[:space:]] ]] || [[ "$rest" =~ -[[:space:]] ]]; then
+                return 1
+            fi
+            
+            # Si ce n'est pas une déconnexion, c'est une connexion active
+            is_active=true
         fi
         
         # Validation des champs
