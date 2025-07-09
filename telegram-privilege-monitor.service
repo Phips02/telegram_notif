@@ -12,10 +12,7 @@ RestartSec=10
 User=root
 Group=root
 
-# Sécurité
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
+# Sécurité allégée pour éviter les erreurs NAMESPACE
 ReadWritePaths=/var/log /var/lib/telegram_privilege_monitor /var/run /tmp
 PrivateTmp=true
 
