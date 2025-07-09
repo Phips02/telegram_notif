@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# telegram_su_simple.sh - Détection simplifiée des élévations su
-# Version: 1.1 - Optimisé pour Debian/Ubuntu
-# Utilise journalctl pour détecter les élévations su avec cache basé sur l'heure
+# telegram_su_simple_fixed.sh - Version corrigée sans notifications en boucle
+# Version: 1.2 - Corrections anti-doublons robustes
 
-# Forcer les locales pour compatibilité Debian/Ubuntu
+# Forcer les locales pour compatibilité
 export LC_ALL=C
 export LANG=C
 
@@ -47,46 +46,39 @@ send_telegram() {
         --max-time 30 > /dev/null 2>&1
 }
 
-# Charger le cache existant
-if [ -f "$CACHE_FILE" ]; then
-    source "$CACHE_FILE"
-else
-    touch "$CACHE_FILE"
-fi
+# Créer un fichier de cache temporaire pour cette exécution
+TEMP_CACHE="/tmp/telegram_su_temp_$$"
 
-# Récupérer les lignes su/sudo récentes (optimisé pour Debian/Ubuntu)
-journalctl --since="45 seconds ago" --no-pager | grep -E "(su\[|sudo\[)[0-9]+\]:" | grep -E "(session opened|authentication)" | while IFS= read -r line; do
+# Récupérer les lignes su/sudo récentes (dernières 45 secondes)
+journalctl --since="45 seconds ago" --no-pager -q 2>/dev/null | \
+grep -E "(su\[|sudo\[)[0-9]+\]:" | \
+grep -E "session opened for user" | \
+while IFS= read -r line; do
     
-    # Regex étendue pour Debian/Ubuntu - capture su et su -l
-    if [[ "$line" =~ ^([A-Za-z]{3}[[:space:]]+[0-9]{1,2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2})[[:space:]]+[^[:space:]]+[[:space:]]+(su|sudo)\[([0-9]+)\]:[[:space:]]+pam_unix\((su|sudo)(-l)?:(session|auth)\):[[:space:]]+(session[[:space:]]+opened[[:space:]]+for[[:space:]]+user[[:space:]]+([^(]+)\(uid=([0-9]+)\)[[:space:]]+by[[:space:]]+([^(]+)\(uid=([0-9]+)\)|authentication) ]]; then
+    # Extraire les informations avec une regex plus robuste
+    if [[ "$line" =~ ([A-Za-z]{3}[[:space:]]+[0-9]{1,2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2})[[:space:]]+[^[:space:]]+[[:space:]]+(su|sudo)\[([0-9]+)\]:[[:space:]]+pam_unix\((su|sudo)(-l)?:session\):[[:space:]]+session[[:space:]]+opened[[:space:]]+for[[:space:]]+user[[:space:]]+([^(]+)\(uid=([0-9]+)\)[[:space:]]+by[[:space:]]+([^(]+)\(uid=([0-9]+)\) ]]; then
         
         timestamp="${BASH_REMATCH[1]}"
-        command_type="${BASH_REMATCH[2]}"  # su ou sudo
+        command_type="${BASH_REMATCH[2]}"
         pid="${BASH_REMATCH[3]}"
+        target_user="${BASH_REMATCH[6]}"
+        target_uid="${BASH_REMATCH[7]}"
+        source_user="${BASH_REMATCH[8]}"
+        source_uid="${BASH_REMATCH[9]}"
         
-        # Pour les sessions ouvertes, extraire les utilisateurs
-        if [[ "$line" =~ session[[:space:]]+opened ]]; then
-            if [[ "$line" =~ session[[:space:]]+opened[[:space:]]+for[[:space:]]+user[[:space:]]+([^(]+)\(uid=([0-9]+)\)[[:space:]]+by[[:space:]]+([^(]+)\(uid=([0-9]+)\) ]]; then
-                target_user="${BASH_REMATCH[1]}"
-                target_uid="${BASH_REMATCH[2]}"
-                source_user="${BASH_REMATCH[3]}"
-                source_uid="${BASH_REMATCH[4]}"
-            else
-                continue  # Ignorer si on ne peut pas extraire les utilisateurs
-            fi
-        else
-            continue  # Ignorer les autres types d'événements pour le moment
-        fi
+        # CORRECTION PRINCIPALE : Créer un ID basé sur les éléments stables uniquement
+        # Ne pas inclure le timestamp exact qui peut varier
+        cache_id="${source_user}_to_${target_user}_${command_type}_${pid}"
         
-        # Créer un ID de cache basé sur timestamp + PID pour unicité
-        cache_id="${pid}_$(echo "$timestamp" | tr -d ' :')"
-        
-        # Vérifier si cette élévation a déjà été notifiée
-        if grep -q "^$cache_id$" "$CACHE_FILE" 2>/dev/null; then
+        # Vérifier si cette élévation a déjà été notifiée (cache global ET temporaire)
+        if grep -q "^$cache_id$" "$CACHE_FILE" 2>/dev/null || grep -q "^$cache_id$" "$TEMP_CACHE" 2>/dev/null; then
             continue
         fi
         
-        # Ajouter au cache
+        # Ajouter au cache temporaire pour éviter les doublons dans cette exécution
+        echo "$cache_id" >> "$TEMP_CACHE"
+        
+        # Ajouter au cache global
         echo "$cache_id" >> "$CACHE_FILE"
         
         # Déterminer l'icône selon le type de commande
@@ -97,29 +89,33 @@ journalctl --since="45 seconds ago" --no-pager | grep -E "(su\[|sudo\[)[0-9]+\]:
             action="Commande sudo"
         fi
         
-        # Créer le message de notification
-        message="$icon *$action détectée*
+        # Créer le message de notification (format simplifié pour éviter les caractères problématiques)
+        message="$icon *$action detectee*
 
-👤 **Utilisateur source:** \`$source_user\` (UID: $source_uid)
-🎯 **Utilisateur cible:** \`$target_user\` (UID: $target_uid)
-⏰ **Heure:** $timestamp
-🔢 **PID:** $pid
-🖥️ **Serveur:** \`$(hostname)\`
+👤 Source: $source_user (UID: $source_uid)
+🎯 Cible: $target_user (UID: $target_uid)
+⏰ Heure: $timestamp
+🔢 PID: $pid
+🖥️ Serveur: $(hostname)
 
-📋 **Commande:** $command_type
-📄 **Ligne complète:**
-\`$line\`"
+📋 Commande: $command_type"
 
         # Envoyer la notification
-        send_telegram "$message"
-        log_message "INFO: Notification envoyée pour $command_type $source_user -> $target_user à $timestamp (PID: $pid)"
+        if send_telegram "$message"; then
+            log_message "INFO: Notification envoyée pour $command_type $source_user -> $target_user (PID: $pid)"
+        else
+            log_message "ERROR: Échec notification $command_type $source_user -> $target_user (PID: $pid)"
+        fi
         
     fi
 done
 
-# Nettoyer le cache (garder seulement les 100 dernières entrées pour serveurs actifs)
+# Nettoyer le cache global (garder seulement les 50 dernières entrées)
 if [ -f "$CACHE_FILE" ]; then
-    tail -n 100 "$CACHE_FILE" > "$CACHE_FILE.tmp" && mv "$CACHE_FILE.tmp" "$CACHE_FILE"
+    tail -n 50 "$CACHE_FILE" > "$CACHE_FILE.tmp" && mv "$CACHE_FILE.tmp" "$CACHE_FILE"
 fi
 
-log_message "INFO: Vérification terminée - Debian/Ubuntu optimized"
+# Nettoyer le cache temporaire
+rm -f "$TEMP_CACHE"
+
+log_message "INFO: Verification terminee - Cache anti-doublons applique"
