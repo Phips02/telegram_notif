@@ -1,5 +1,5 @@
-# 🔔 Telegram WTMP Monitor
-Version 5.1 - Surveillance complète des connexions et privilèges
+# 🔔 Telegram Notification System
+Version 5.3 - Surveillance complète des connexions et privilèges
 
 ## 🎯 À propos
 
@@ -11,24 +11,44 @@ Système de surveillance complet pour recevoir des notifications Telegram lors d
 - 📺 **Interface graphique** (X11, sessions GUI)
 - 💻 **Sessions utilisateur** (screen, tmux détectées automatiquement)
 
-### 🔐 **Élévations de privilèges (via journalctl)**
+### 🔐 **Élévations de privilèges (2 systèmes)**
+
+#### **Système complet (journalctl)**
 - 🔐 **Commandes su** (changement d'utilisateur)
 - ⚡ **Commandes sudo** (exécution privilégiée)
 - 🔑 **Sessions PAM** (ouverture/fermeture)
 
-## 🚀 Fonctionnalités V5.1
+#### **Système simplifié (su uniquement)**
+- 🔐 **Détection su ultra-rapide** via journalctl
+- ⚡ **Timer systemd** (30 secondes)
+- 💾 **Cache intelligent** anti-doublons
 
+## 🚀 Fonctionnalités V5.3
+
+### 🔧 **Système complet**
 - ✅ **Double surveillance** : wtmp + journalctl
 - ✅ **Daemons robustes** avec gestion PID et logs
 - ✅ **Services systemd** intégrés pour démarrage automatique
 - ✅ **Détection fiable** sans faux positifs
-- ✅ **Notifications temps réel** avec informations complètes
 - ✅ **Interface de gestion** complète (start/stop/status/test)
+
+### ⚡ **Système simplifié (telegram_su_simple.sh V1.1)**
+- ✅ **Ultra-rapide** : Détection su/sudo en 45 secondes
+- ✅ **Code minimal** : 125 lignes optimisées Debian/Ubuntu
+- ✅ **Timer systemd** : Exécution automatique toutes les 30s
+- ✅ **Cache intelligent** : Anti-doublons basé sur PID + timestamp
+- ✅ **Regex étendue** : Support su ET sudo avec variantes PAM
+- ✅ **Messages enrichis** : Icônes distinctives (🔐 su, ⚡ sudo)
+
+### 🔧 **Commun aux deux systèmes**
+- ✅ **Notifications temps réel** avec informations complètes
 - ✅ **Configuration flexible** et sécurisée
-- ✅ **Anti-doublons** avec système de cache intelligent
+- ✅ **Logs détaillés** pour diagnostic
+- ✅ **Installation automatique** avec tests intégrés
 
 ## 📁 Fichiers du projet
 
+### 🔧 **Système complet (wtmp + journalctl)**
 | Fichier | Description |
 |---------|-------------|
 | `install_wtmp_notif.sh` | Script d'installation automatique |
@@ -36,6 +56,17 @@ Système de surveillance complet pour recevoir des notifications Telegram lors d
 | `telegram_privilege_monitor.sh` | Daemon surveillance privilèges (journalctl) |
 | `telegram-wtmp-monitor.service` | Service systemd pour connexions |
 | `telegram-privilege-monitor.service` | Service systemd pour privilèges |
+
+### ⚡ **Système simplifié (su/sudo optimisé Debian/Ubuntu)**
+| Fichier | Description |
+|---------|-------------|
+| `telegram_su_simple.sh` | Script détection su/sudo V1.1 (125 lignes) |
+| `install_su_simple.sh` | Installation avec timer systemd |
+| `test_su_simple.sh` | Script de validation complet |
+
+### 🔧 **Configuration commune**
+| Fichier | Description |
+|---------|-------------|
 | `credentials_example.cfg` | Exemple configuration identifiants Telegram |
 | `telegram_notif_example.cfg` | Exemple configuration système |
 | `README.md` | Documentation complète |
@@ -54,7 +85,7 @@ Le script d'installation se charge automatiquement de :
 
 **Exigence :** Exécuter en tant que **root** (accès à /var/log/wtmp requis)
 
-### Installation du système
+### 🔧 Installation du système complet
 
 **Option 1 - Installation automatique :**
 ```bash
@@ -73,7 +104,41 @@ chmod +x install_wtmp_notif.sh
 sudo ./install_wtmp_notif.sh
 ```
 
+### ⚡ Installation du système simplifié (su/sudo optimisé)
+
+**Recommandé pour une détection su/sudo ultra-rapide et robuste !**
+
+**Option 1 - Installation automatique :**
+```bash
+su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_su_simple.sh && chmod +x install_su_simple.sh && ./install_su_simple.sh"
+```
+
+**Option 2 - Installation manuelle :**
+```bash
+# Cloner le dépôt
+cd /tmp
+git clone https://github.com/Phips02/telegram_notif.git
+cd telegram_notif
+
+# Rendre exécutable et installer
+chmod +x telegram_su_simple.sh install_su_simple.sh test_su_simple.sh
+sudo ./install_su_simple.sh
+
+# Tester l'installation
+./test_su_simple.sh
+```
+
+**Avantages du système simplifié V1.1 :**
+- 🚀 **Ultra-rapide** : Détection en 45 secondes (fenêtre étendue)
+- 🔧 **Robuste** : Regex étendue pour su ET sudo
+- 💾 **Efficace** : Cache intelligent basé sur PID + timestamp
+- ⚙️ **Autonome** : Timer systemd intégré
+- 🎯 **Optimisé** : Spécialement conçu pour Debian/Ubuntu
+- 📱 **Messages riches** : Informations complètes avec émojis
+
 ## Structure des fichiers
+
+### 🔧 **Système complet**
 ```
 /usr/local/bin/telegram_notif/
 ├── telegram_wtmp_monitor.sh         # Daemon surveillance connexions
@@ -82,10 +147,6 @@ sudo ./install_wtmp_notif.sh
 /usr/local/bin/
 ├── telegram-wtmp-monitor            # Lien symbolique connexions
 └── telegram-privilege-monitor       # Lien symbolique privilèges
-
-/etc/telegram/
-├── credentials.cfg                  # Identifiants Telegram (partagés)
-└── telegram_notif.cfg              # Configuration du monitoring
 
 /etc/systemd/system/
 ├── telegram-wtmp-monitor.service    # Service systemd connexions
@@ -96,11 +157,33 @@ sudo ./install_wtmp_notif.sh
 /var/log/telegram_privilege_monitor.log  # Logs privilèges
 /var/lib/telegram_wtmp_monitor/          # Données daemon connexions
 /var/lib/telegram_privilege_monitor/     # Données daemon privilèges
-/var/run/telegram_wtmp_monitor.pid       # PID connexions
-/var/run/telegram_privilege_monitor.pid  # PID privilèges
 ```
 
-## Configuration Telegram
+### ⚡ **Système simplifié**
+```
+/usr/local/bin/telegram_notif/
+└── telegram_su_simple.sh           # Script détection su ultra-simple
+
+/usr/local/bin/
+└── telegram-su-simple               # Lien symbolique
+
+/etc/systemd/system/
+├── telegram-su-simple.service       # Service systemd (oneshot)
+└── telegram-su-simple.timer         # Timer systemd (30s)
+
+# Logs et données
+/var/log/telegram_su_simple.log          # Logs détection su
+/var/lib/telegram_su_simple/cache        # Cache anti-doublons
+```
+
+### 🔧 **Configuration commune**
+```
+/etc/telegram/
+├── credentials.cfg                  # Identifiants Telegram (partagés)
+└── telegram_notif.cfg              # Configuration du monitoring
+```
+
+## 🔧 Configuration Telegram
 
 Configuration simple et sécurisée pour les notifications Telegram.
 
@@ -217,6 +300,77 @@ sudo journalctl -u telegram-wtmp-monitor -u telegram-privilege-monitor -f
 ps aux | grep telegram_wtmp_monitor
 ```
 
+## ⚡ Gestion du système simplifié (su)
+
+### Commandes systemd (timer)
+```bash
+# Démarrer le timer
+sudo systemctl start telegram-su-simple.timer
+
+# Arrêter le timer
+sudo systemctl stop telegram-su-simple.timer
+
+# Voir le statut du timer
+sudo systemctl status telegram-su-simple.timer
+
+# Voir les exécutions récentes
+sudo systemctl list-timers telegram-su-simple.timer
+```
+
+## 🔧 Gestion du système simplifié V1.1
+
+### Commandes systemd
+```bash
+# === TIMER SYSTEMD ===
+# Démarrer le timer
+sudo systemctl start telegram-su-simple.timer
+
+# Arrêter le timer
+sudo systemctl stop telegram-su-simple.timer
+
+# Redémarrer le timer
+sudo systemctl restart telegram-su-simple.timer
+
+# Statut du timer
+sudo systemctl status telegram-su-simple.timer
+
+# Activer au démarrage
+sudo systemctl enable telegram-su-simple.timer
+
+# Désactiver au démarrage
+sudo systemctl disable telegram-su-simple.timer
+```
+
+### Commandes manuelles
+```bash
+# Exécution manuelle
+telegram-su-simple
+
+# Ou directement
+/usr/local/bin/telegram_notif/telegram_su_simple.sh
+
+# Test complet
+./test_su_simple.sh
+```
+
+### Logs et monitoring
+```bash
+# Voir les logs du timer
+sudo journalctl -u telegram-su-simple.timer -f
+
+# Voir les logs du service
+sudo journalctl -u telegram-su-simple.service -f
+
+# Voir les logs du script
+sudo tail -f /var/log/telegram_su_simple.log
+
+# Vérifier le cache
+sudo cat /var/lib/telegram_su_simple/cache
+
+# Vérifier les prochaines exécutions
+sudo systemctl list-timers telegram-su-simple.timer
+```
+
 ## 📱 Exemples de notifications
 
 ### 🔑 Notification de connexion SSH
@@ -269,6 +423,38 @@ ps aux | grep telegram_wtmp_monitor
 • Timestamp journal: jui 09 11:45:30
 ```
 
+### 🚀 Notifications système simplifié V1.1
+
+**Notification su :**
+```
+🔐 *Élévation su détectée*
+
+👤 **Utilisateur source:** `phips` (UID: 1000)
+🎯 **Utilisateur cible:** `root` (UID: 0)
+⏰ **Heure:** Jul 9 11:45:30
+🔢 **PID:** 12345
+🖥️ **Serveur:** `server-01`
+
+📋 **Commande:** su
+📄 **Ligne complète:**
+`Jul 9 11:45:30 server-01 su[12345]: pam_unix(su-l:session): session opened for user root(uid=0) by phips(uid=1000)`
+```
+
+**Notification sudo :**
+```
+⚡ *Commande sudo détectée*
+
+👤 **Utilisateur source:** `phips` (UID: 1000)
+🎯 **Utilisateur cible:** `root` (UID: 0)
+⏰ **Heure:** Jul 9 11:45:30
+🔢 **PID:** 12346
+🖥️ **Serveur:** `server-01`
+
+📋 **Commande:** sudo
+📄 **Ligne complète:**
+`Jul 9 11:45:30 server-01 sudo[12346]: pam_unix(sudo:session): session opened for user root(uid=0) by phips(uid=1000)`
+```
+
 ## 🔍 Types d'événements détectés
 
 ### 🔌 Connexions (via wtmp)
@@ -281,11 +467,21 @@ ps aux | grep telegram_wtmp_monitor
 | **Login direct** | 🖥️ | Connexions console | Via wtmp - console |
 
 ### 🔐 Élévations de privilèges (via journalctl)
+
+**Système complet :**
 | Type | Icône | Description | Détection |
 |------|------|-------------|----------|
 | **Commande su** | 🔐 | Changement d'utilisateur | `su[PID]: (to user) source on pts/X` |
 | **Commande sudo** | ⚡ | Exécution privilégiée | `sudo[PID]: user : TTY=pts/X ; USER=root` |
 | **Session PAM** | 🔑 | Ouverture session su | `pam_unix(su-l:session): session opened` |
+
+**Système simplifié V1.1 (optimisé Debian/Ubuntu) :**
+| Type | Icône | Description | Détection |
+|------|------|-------------|----------|
+| **Élévation su** | 🔐 | Changement utilisateur | `pam_unix(su-l:session): session opened for user X by Y` |
+| **Commande sudo** | ⚡ | Exécution privilégiée | `pam_unix(sudo:session): session opened for user X by Y` |
+| **Cache intelligent** | 💾 | Anti-doublons | Basé sur `PID_timestamp` unique |
+| **Regex étendue** | 🎯 | Support variantes | `(su|sudo)(-l)?:(session|auth)` |
 
 ## 🚀 Avantages de cette approche
 
@@ -364,7 +560,8 @@ sudo chmod +x /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh
 
 ## 🔄 Mise à jour
 
-Pour mettre à jour le système, réexécutez simplement le script d'installation :
+### 🔧 **Système complet**
+Pour mettre à jour le système complet, réexécutez simplement le script d'installation :
 
 ```bash
 # Télécharger et exécuter la dernière version
@@ -374,14 +571,33 @@ chmod +x install_wtmp_notif.sh
 sudo ./install_wtmp_notif.sh
 ```
 
-Le script conservera automatiquement votre configuration existante.
+### ⚡ **Système simplifié V1.1**
+Pour mettre à jour le système simplifié :
+
+```bash
+# Télécharger et exécuter la dernière version
+cd /tmp
+wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_su_simple.sh
+chmod +x install_su_simple.sh
+sudo ./install_su_simple.sh
+```
+
+Les scripts conserveront automatiquement votre configuration existante.
 
 ## ⚙️ Compatibilité
 
-- **Systèmes supportés :** Debian/Ubuntu (toutes versions récentes)
+### 🔧 **Système complet (WTMP + journalctl)**
+- **Systèmes supportés :** Debian/Ubuntu/CentOS/RHEL (toutes versions récentes)
 - **Architecture :** x86_64 (AMD64)
 - **Prérequis :** curl, last (installés automatiquement)
 - **Permissions :** Accès root requis pour /var/log/wtmp
+
+### ⚡ **Système simplifié V1.1**
+- **Systèmes supportés :** Debian/Ubuntu (optimisé spécifiquement)
+- **Architecture :** x86_64 (AMD64)
+- **Prérequis :** curl, journalctl (installés automatiquement)
+- **Permissions :** Accès root requis pour journalctl
+- **Locales :** Forcées LC_ALL=C et LANG=C pour compatibilité maximale
 
 ## 📜 Licence
 
@@ -389,21 +605,49 @@ Ce projet est sous licence GNU GPLv3.
 
 ## 🗑️ Désinstallation
 
-Pour désinstaller complètement le système :
+### 🔧 **Système complet**
+Pour désinstaller complètement le système complet :
 
 ```bash
-# Arrêter et désactiver le service
-sudo systemctl stop telegram-wtmp-monitor
-sudo systemctl disable telegram-wtmp-monitor
+# Arrêter et désactiver les services
+sudo systemctl stop telegram-wtmp-monitor telegram-privilege-monitor
+sudo systemctl disable telegram-wtmp-monitor telegram-privilege-monitor
 sudo rm /etc/systemd/system/telegram-wtmp-monitor.service
+sudo rm /etc/systemd/system/telegram-privilege-monitor.service
 sudo systemctl daemon-reload
 
 # Supprimer les fichiers
 sudo rm -rf /usr/local/bin/telegram_notif/
 sudo rm -f /usr/local/bin/telegram-wtmp-monitor
+sudo rm -f /usr/local/bin/telegram-privilege-monitor
 sudo rm -rf /etc/telegram/
 sudo rm -f /var/log/telegram_wtmp_monitor.log
+sudo rm -f /var/log/telegram_privilege_monitor.log
 sudo rm -rf /var/lib/telegram_wtmp_monitor/
 
-echo "Désinstallation terminée !"
+echo "Désinstallation système complet terminée !"
+```
+
+### ⚡ **Système simplifié V1.1**
+Pour désinstaller complètement le système simplifié :
+
+```bash
+# Arrêter et désactiver le timer
+sudo systemctl stop telegram-su-simple.timer
+sudo systemctl disable telegram-su-simple.timer
+sudo rm /etc/systemd/system/telegram-su-simple.timer
+sudo rm /etc/systemd/system/telegram-su-simple.service
+sudo systemctl daemon-reload
+
+# Supprimer les fichiers
+sudo rm -f /usr/local/bin/telegram_notif/telegram_su_simple.sh
+sudo rm -f /usr/local/bin/telegram-su-simple
+sudo rm -f /var/log/telegram_su_simple.log
+sudo rm -rf /var/lib/telegram_su_simple/
+
+# Conserver /etc/telegram/ si le système complet est installé
+# Sinon, supprimer aussi :
+# sudo rm -rf /etc/telegram/
+
+echo "Désinstallation système simplifié terminée !"
 ```
