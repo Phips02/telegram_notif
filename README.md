@@ -62,7 +62,6 @@ Système de surveillance complet pour recevoir des notifications Telegram lors d
 |---------|-------------|
 | `telegram_su_simple.sh` | Script détection su/sudo V1.1 (125 lignes) |
 | `install_su_simple.sh` | Installation avec timer systemd |
-| `test_su_simple.sh` | Script de validation complet |
 
 ### 🔧 **Configuration commune**
 | Fichier | Description |
@@ -75,26 +74,60 @@ Système de surveillance complet pour recevoir des notifications Telegram lors d
 
 ### Prérequis
 
-**Installation automatique !** 🎉
+**Exigences système :**
+- 🐧 **OS** : Debian/Ubuntu
+- 🔑 **Permissions** : Accès root requis (pour /var/log/wtmp et systemd)
+- 🌐 **Réseau** : Connexion internet pour téléchargement et API Telegram
+- 🤖 **Bot Telegram** : Token bot + Chat ID (voir [guide création bot](https://core.telegram.org/bots#6-botfather))
 
-Le script d'installation se charge automatiquement de :
-- ✅ Vérifier et installer les dépendances (curl, last)
-- ✅ Configurer le service systemd
-- ✅ Créer tous les fichiers et permissions
-- ✅ Tester la configuration Telegram
+**Dépendances (installées automatiquement) :**
+- `curl` - Envoi des notifications
+- `last` - Lecture des logs wtmp
+- `journalctl` - Lecture des logs système
+- `systemd` - Gestion des services
 
-**Exigence :** Exécuter en tant que **root** (accès à /var/log/wtmp requis)
+---
 
-### 🔧 Installation du système complet
+### 🎯 Installation automatique complète (RECOMMANDÉE)
 
-**Option 1 - Installation automatique :**
+**Une seule commande installe tout le système complet !** 🎉
+
 ```bash
 su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_wtmp_notif.sh && chmod +x install_wtmp_notif.sh && ./install_wtmp_notif.sh"
 ```
 
-**Option 2 - Installation manuelle :**
+**Ce que fait cette commande :**
+- ✅ **Télécharge** automatiquement tous les fichiers nécessaires
+- ✅ **Configure** les identifiants Telegram (BOT_TOKEN + CHAT_ID)
+- ✅ **Installe** les deux daemons (connexions + privilèges)
+- ✅ **Démarre** les services systemd automatiquement
+- ✅ **Teste** la configuration avec notification de test
+- ✅ **Vérifie** toutes les dépendances (curl, last, journalctl)
+
+**Résultat :** Système complet fonctionnel en 2 minutes !
+
+---
+
+### 🔧 Installation manuelle du système complet
+
+**Si vous préférez installer étape par étape :**
+
 ```bash
-# Cloner le dépôt
+# 1. Télécharger les fichiers
+cd /tmp
+wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_wtmp_notif.sh
+chmod +x install_wtmp_notif.sh
+
+# 2. Exécuter l'installation
+sudo ./install_wtmp_notif.sh
+
+# 3. Vérifier l'installation
+sudo systemctl status telegram-wtmp-monitor telegram-privilege-monitor
+```
+
+**Ou via git :**
+```bash
+# Cloner le dépôt complet
 cd /tmp
 git clone https://github.com/Phips02/telegram_notif.git
 cd telegram_notif
@@ -104,37 +137,50 @@ chmod +x install_wtmp_notif.sh
 sudo ./install_wtmp_notif.sh
 ```
 
+---
+
 ### ⚡ Installation du système simplifié (su/sudo optimisé)
 
-**Recommandé pour une détection su/sudo ultra-rapide et robuste !**
+**Alternative légère pour détection su/sudo uniquement :**
 
-**Option 1 - Installation automatique :**
+**Installation automatique :**
 ```bash
 su -c "cd /tmp && wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_su_simple.sh && chmod +x install_su_simple.sh && ./install_su_simple.sh"
 ```
 
-**Option 2 - Installation manuelle :**
+**Installation manuelle :**
 ```bash
-# Cloner le dépôt
+# 1. Télécharger les fichiers
+cd /tmp
+wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/install_su_simple.sh
+chmod +x install_su_simple.sh
+
+# 2. Exécuter l'installation
+sudo ./install_su_simple.sh
+
+# 3. Vérifier le timer
+sudo systemctl status telegram-su-simple.timer
+```
+
+**Ou via git :**
+```bash
+# Cloner le dépôt complet
 cd /tmp
 git clone https://github.com/Phips02/telegram_notif.git
 cd telegram_notif
 
-# Rendre exécutable et installer
-chmod +x telegram_su_simple.sh install_su_simple.sh test_su_simple.sh
+# Installer le système simplifié
+chmod +x install_su_simple.sh
 sudo ./install_su_simple.sh
-
-# Tester l'installation
-./test_su_simple.sh
 ```
 
-**Avantages du système simplifié V1.1 :**
+**Pourquoi choisir le système simplifié V1.1 ?**
 - 🚀 **Ultra-rapide** : Détection en 45 secondes (fenêtre étendue)
 - 🔧 **Robuste** : Regex étendue pour su ET sudo
-- 💾 **Efficace** : Cache intelligent basé sur PID + timestamp
-- ⚙️ **Autonome** : Timer systemd intégré
+- 💾 **Léger** : 125 lignes de code optimisées
+- ⚙️ **Autonome** : Timer systemd intégré (30s)
 - 🎯 **Optimisé** : Spécialement conçu pour Debian/Ubuntu
-- 📱 **Messages riches** : Informations complètes avec émojis
+- 📱 **Messages riches** : Informations complètes avec émojis distinctifs
 
 ## Structure des fichiers
 
@@ -348,9 +394,6 @@ telegram-su-simple
 
 # Ou directement
 /usr/local/bin/telegram_notif/telegram_su_simple.sh
-
-# Test complet
-./test_su_simple.sh
 ```
 
 ### Logs et monitoring
@@ -489,7 +532,7 @@ sudo systemctl list-timers telegram-su-simple.timer
 - ✅ **Fiabilité** : Pas de faux positifs ou de connexions manquées
 - ✅ **Performance** : Daemon léger avec surveillance efficace
 - ✅ **Simplicité** : Aucune configuration complexe requise
-- ✅ **Compatibilité** : Fonctionne sur tous les systèmes Linux
+- ✅ **Compatibilité** : Optimisé pour Debian/Ubuntu
 - ✅ **Maintenance** : Architecture simple et robuste
 
 ## 🧪 Test et validation
@@ -587,7 +630,7 @@ Les scripts conserveront automatiquement votre configuration existante.
 ## ⚙️ Compatibilité
 
 ### 🔧 **Système complet (WTMP + journalctl)**
-- **Systèmes supportés :** Debian/Ubuntu/CentOS/RHEL (toutes versions récentes)
+- **Systèmes supportés :** Debian/Ubuntu
 - **Architecture :** x86_64 (AMD64)
 - **Prérequis :** curl, last (installés automatiquement)
 - **Permissions :** Accès root requis pour /var/log/wtmp
