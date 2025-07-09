@@ -192,7 +192,8 @@ monitor_privileges() {
                     local source_user=$(echo "$user_info" | cut -d: -f3)
                     local source_uid=$(echo "$user_info" | cut -d: -f4)
                     
-                    local privilege_id="su:$source_user:$target_user:$(date +%s)"
+                    # Créer un ID basé sur la ligne complète (sans timestamp dynamique)
+                    local privilege_id="su:$source_user:$target_user:$line"
                     local privilege_hash=$(create_privilege_hash "$privilege_id")
                     
                     # Vérifier si déjà traité
@@ -232,7 +233,8 @@ monitor_privileges() {
                     local target_user=$(echo "$sudo_info" | cut -d: -f3)
                     local command=$(echo "$sudo_info" | cut -d: -f4-)
                     
-                    local privilege_id="sudo:$source_user:$target_user:$command:$(date +%s)"
+                    # Créer un ID basé sur la ligne complète (sans timestamp dynamique)
+                    local privilege_id="sudo:$source_user:$target_user:$command:$line"
                     local privilege_hash=$(create_privilege_hash "$privilege_id")
                     
                     # Vérifier si déjà traité
