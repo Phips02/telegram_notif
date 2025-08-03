@@ -174,6 +174,13 @@ parse_last_line() {
         local host="${BASH_REMATCH[3]}"
         local rest="${BASH_REMATCH[4]}"
         
+        # Filtrer les entrées SSH redondantes pour éviter les notifications en double
+        # Les connexions SSH génèrent à la fois une entrée "ssh" et "pts/X"
+        # On ne garde que les entrées pts/* qui sont plus informatives
+        if [[ "$terminal" == "ssh" ]]; then
+            return 1
+        fi
+        
         # Extraire la partie date et déterminer le type de connexion
         local datetime
         local is_active=false

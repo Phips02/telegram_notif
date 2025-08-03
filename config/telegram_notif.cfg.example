@@ -1,0 +1,5 @@
+# Configuration optionnelle
+CHECK_INTERVAL=5
+MAX_CACHE_SIZE=1000
+CURL_TIMEOUT=10
+SKIP_PUBLIC_IP=true

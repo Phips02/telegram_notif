@@ -1,6 +1,5 @@
 [Unit]
 Description=Telegram WTMP Monitor - Surveillance des connexions
-Documentation=https://github.com/Phips02/telegram_notif
 After=network.target
 Wants=network.target
 
@@ -21,9 +20,6 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/log /var/lib/telegram_wtmp_monitor /var/run /tmp
-
-# Variables d'environnement
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target
