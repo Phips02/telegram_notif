@@ -1,7 +1,8 @@
 #!/bin/bash
+# Telegram Notification System V6
+
 # Script de déploiement du système de notification Telegram
 # Compatible: Debian/Ubuntu uniquement
-# Usage: curl -sSL https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash
 
 set -e
 

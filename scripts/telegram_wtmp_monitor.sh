@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Telegram WTMP Monitor - Daemon de surveillance des connexions
-# Version 5.1 - Approche simplifiée basée sur wtmp
+# Version 6 - Approche simplifiée basée sur wtmp
 ###############################################################################
 
 # Version du système

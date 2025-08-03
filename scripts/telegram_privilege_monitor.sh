@@ -1,8 +1,9 @@
 #!/bin/bash
+# Telegram Notification System V6
 
 # telegram_privilege_monitor.sh V1.0
 # Daemon de surveillance des élévations de privilèges (su/sudo) via journalctl
-# Partie du système Telegram Notification V5.1
+
 
 # Configuration par défaut
 SCRIPT_NAME="telegram_privilege_monitor"
