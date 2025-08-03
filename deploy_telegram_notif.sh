@@ -76,8 +76,6 @@ echo "2. Obtenez votre CHAT_ID en envoyant un message au bot puis en consultant 
 echo "   https://api.telegram.org/bot<VOTRE_TOKEN>/getUpdates"
 echo ""
 
-# Rediriger depuis /dev/tty pour permettre l'interaction via pipe
-exec < /dev/tty
 read -p "🤖 Entrez votre BOT_TOKEN : " BOT_TOKEN
 read -p "💬 Entrez votre CHAT_ID : " CHAT_ID
 
