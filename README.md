@@ -21,12 +21,12 @@ Système de notification Telegram pour la surveillance des connexions et éléva
 ### Déploiement automatique
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash
+wget -O- https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash
 ```
 
-**Ou avec wget :**
+**avec curl :**
 ```bash
-wget -O- https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash
+curl -sSL https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash
 ```
 
 Le script vous demandera interactivement vos credentials Telegram et configurera tout automatiquement.
