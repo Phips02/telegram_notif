@@ -1,15 +1,117 @@
 #!/bin/bash
-# Telegram Notification System V6
+# Telegram Notification System V6.2
 
 # Script de déploiement du système de notification Telegram
 # Compatible: Debian/Ubuntu uniquement
 
 set -e
 
+VERSION="6.2"
 GITHUB_REPO="https://raw.githubusercontent.com/Phips02/telegram_notif/main"
 TEMP_DIR="/tmp/telegram_notif_install"
+INSTALL_DIR="/usr/local/bin/telegram_notif"
+CONFIG_DIR="/etc/telegram"
 
-echo "🚀 Installation du système de notification Telegram"
+# === Gestion des arguments ===
+show_help() {
+    echo "Telegram Notification System - Deploy Script v$VERSION"
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --update, -u    Met à jour les scripts sans reconfigurer les credentials"
+    echo "  --version, -v   Affiche la version"
+    echo "  --help, -h      Affiche cette aide"
+    echo ""
+    echo "Sans option: Installation complète avec configuration interactive"
+}
+
+update_only() {
+    echo "🔄 Mode mise à jour - v$VERSION"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Vérification root
+    if [[ $EUID -ne 0 ]]; then
+        echo "❌ Ce script doit être exécuté en tant que root"
+        exit 1
+    fi
+
+    # Vérifier que l'installation existe
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        echo "❌ Installation non trouvée dans $INSTALL_DIR"
+        echo "   Lancez le script sans --update pour une installation complète."
+        exit 1
+    fi
+
+    if [[ ! -f "$CONFIG_DIR/credentials.cfg" ]]; then
+        echo "❌ Configuration non trouvée dans $CONFIG_DIR/credentials.cfg"
+        echo "   Lancez le script sans --update pour une installation complète."
+        exit 1
+    fi
+
+    echo "⬇️  Téléchargement des scripts mis à jour..."
+    curl -fsSL "$GITHUB_REPO/scripts/telegram_wtmp_monitor.sh" -o "$INSTALL_DIR/telegram_wtmp_monitor.sh"
+    curl -fsSL "$GITHUB_REPO/scripts/telegram_privilege_monitor.sh" -o "$INSTALL_DIR/telegram_privilege_monitor.sh"
+
+    # Mise à jour des services systemd (au cas où ils auraient changé)
+    echo "⬇️  Téléchargement des services systemd..."
+    curl -fsSL "$GITHUB_REPO/systemd/telegram-wtmp-monitor.service" -o /etc/systemd/system/telegram-wtmp-monitor.service
+    curl -fsSL "$GITHUB_REPO/systemd/telegram-privilege-monitor.service" -o /etc/systemd/system/telegram-privilege-monitor.service
+    systemctl daemon-reload
+
+    # Permissions
+    chmod +x "$INSTALL_DIR"/*.sh
+
+    # Redémarrer les services
+    echo "🔄 Redémarrage des services..."
+    systemctl restart telegram-wtmp-monitor telegram-privilege-monitor
+
+    # Vérification du statut
+    echo ""
+    echo "📊 Statut des services :"
+    if systemctl is-active --quiet telegram-wtmp-monitor.service; then
+        echo "✅ telegram-wtmp-monitor.service : Actif"
+    else
+        echo "❌ telegram-wtmp-monitor.service : Inactif"
+    fi
+
+    if systemctl is-active --quiet telegram-privilege-monitor.service; then
+        echo "✅ telegram-privilege-monitor.service : Actif"
+    else
+        echo "❌ telegram-privilege-monitor.service : Inactif"
+    fi
+
+    echo ""
+    echo "🎉 Mise à jour terminée !"
+    exit 0
+}
+
+# Traitement des arguments
+case "${1:-}" in
+    --update|-u)
+        update_only
+        ;;
+    --version|-v)
+        echo "Telegram Notification System - Deploy Script v$VERSION"
+        exit 0
+        ;;
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    "")
+        # Pas d'argument = installation complète
+        ;;
+    *)
+        echo "❌ Option inconnue: $1"
+        show_help
+        exit 1
+        ;;
+esac
+
+# === Installation complète (code original) ===
+
+echo "🚀 Installation du système de notification Telegram v$VERSION"
 echo "📦 Depuis: https://github.com/Phips02/telegram_notif"
 echo ""
 
@@ -50,15 +152,15 @@ curl -sSL "$GITHUB_REPO/config/telegram_notif.cfg.example" -o telegram_notif.cfg
 
 # Installation des scripts
 echo "📜 Installation des scripts..."
-mkdir -p /usr/local/bin/telegram_notif
-cp telegram_wtmp_monitor.sh /usr/local/bin/telegram_notif/
-cp telegram_privilege_monitor.sh /usr/local/bin/telegram_notif/
-chmod +x /usr/local/bin/telegram_notif/*.sh
+mkdir -p "$INSTALL_DIR"
+cp telegram_wtmp_monitor.sh "$INSTALL_DIR/"
+cp telegram_privilege_monitor.sh "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR"/*.sh
 
 # Création des liens symboliques
 echo "🔗 Création des liens symboliques..."
-ln -sf /usr/local/bin/telegram_notif/telegram_wtmp_monitor.sh /usr/local/bin/telegram-wtmp-monitor
-ln -sf /usr/local/bin/telegram_notif/telegram_privilege_monitor.sh /usr/local/bin/telegram-privilege-monitor
+ln -sf "$INSTALL_DIR/telegram_wtmp_monitor.sh" /usr/local/bin/telegram-wtmp-monitor
+ln -sf "$INSTALL_DIR/telegram_privilege_monitor.sh" /usr/local/bin/telegram-privilege-monitor
 
 # Installation des services systemd
 echo "⚙️  Installation des services systemd..."
@@ -88,21 +190,21 @@ fi
 
 # Création du répertoire de configuration
 echo "📝 Création de la configuration..."
-mkdir -p /etc/telegram
+mkdir -p "$CONFIG_DIR"
 
 # Création du fichier credentials avec les bonnes permissions
-cat > /etc/telegram/credentials.cfg << EOF
+cat > "$CONFIG_DIR/credentials.cfg" << EOF
 # Configuration Telegram Bot
 BOT_TOKEN="$BOT_TOKEN"
 CHAT_ID="$CHAT_ID"
 EOF
 
 # Configuration des permissions de sécurité
-chmod 600 /etc/telegram/credentials.cfg
-chown root:root /etc/telegram/credentials.cfg
+chmod 600 "$CONFIG_DIR/credentials.cfg"
+chown root:root "$CONFIG_DIR/credentials.cfg"
 
 # Copie de la configuration optionnelle (renommer sans .example)
-cp telegram_notif.cfg.example /etc/telegram/telegram_notif.cfg
+cp telegram_notif.cfg.example "$CONFIG_DIR/telegram_notif.cfg"
 
 # Création des répertoires de logs et cache
 echo "📁 Création des répertoires système..."
@@ -161,3 +263,6 @@ echo ""
 echo "📝 Logs disponibles :"
 echo "   /var/log/telegram_wtmp_monitor.log"
 echo "   /var/log/telegram_privilege_monitor.log"
+echo ""
+echo "🔄 Pour mettre à jour ultérieurement :"
+echo "   curl -fsSL $GITHUB_REPO/deploy_telegram_notif.sh | bash -s -- --update"

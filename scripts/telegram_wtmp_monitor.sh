@@ -2,11 +2,12 @@
 
 ###############################################################################
 # Telegram WTMP Monitor - Daemon de surveillance des connexions
-# Version 6 - Approche simplifiée basée sur wtmp
+# Version 6.2 - Approche simplifiée basée sur wtmp
+# Compatibilité: Debian 12, Debian 13 (wtmpdb)
 ###############################################################################
 
 # Version du système
-TELEGRAM_VERSION="5.1"
+TELEGRAM_VERSION="6.2"
 
 # Configuration par défaut
 SCRIPT_NAME="telegram_wtmp_monitor"
@@ -323,6 +324,7 @@ create_notification_message() {
 🌍 IP publique: \`$public_ip\`
 ───────────────────────────
 📊 Type: $connection_type
+🔧 Version: $TELEGRAM_VERSION
 EOF
 }
 
@@ -410,6 +412,8 @@ cleanup() {
 show_help() {
     cat << EOF
 Usage: $0 [OPTIONS]
+
+Telegram WTMP Monitor v$TELEGRAM_VERSION
 
 Options:
   start       Démarrer le daemon

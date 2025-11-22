@@ -1,4 +1,4 @@
-# 🔔 Telegram Notification System V6
+# 🔔 Telegram Notification System V6.2
 
 Système de notification Telegram pour la surveillance des connexions et élévations de privilèges sur serveurs Linux.
 
@@ -9,27 +9,44 @@ Système de notification Telegram pour la surveillance des connexions et éléva
 - **Déduplication intelligente** : Évite les notifications en double
 - **Configuration sécurisée** : Permissions strictes sur les fichiers de configuration
 - **Installation automatisée** : Déploiement en une commande
+- **Mise à jour simplifiée** : Option `--update` pour mettre à jour sans reconfigurer
 
 ## 🚀 Installation rapide
 
 ### Prérequis
 
-- Serveur Debian/Ubuntu
+- Serveur Debian 12/13
 - Accès root
 - Connexion internet
 
 ### Déploiement automatique
 
 ```bash
-# Télécharger le script
-wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh
+# Télécharger et exécuter le script d'installation
+curl -fsSL https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash
+```
 
-# Rendre exécutable et lancer
+Ou manuellement :
+
+```bash
+wget https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh
 chmod +x deploy_telegram_notif.sh
 ./deploy_telegram_notif.sh
 ```
 
 Le script vous demandera interactivement vos credentials Telegram et configurera tout automatiquement.
+
+## 🔄 Mise à jour
+
+Pour mettre à jour une installation existante sans reconfigurer les credentials :
+
+```bash
+# Depuis n'importe quelle machine avec le script installé
+curl -fsSL https://raw.githubusercontent.com/Phips02/telegram_notif/main/deploy_telegram_notif.sh | bash -s -- --update
+
+# Ou si vous avez le script localement
+./deploy_telegram_notif.sh --update
+```
 
 ## 🤖 Configuration Telegram
 
@@ -64,6 +81,10 @@ systemctl status telegram-privilege-monitor
 # Tester les notifications
 telegram-wtmp-monitor test
 telegram-privilege-monitor test
+
+# Afficher la version
+telegram-wtmp-monitor --version
+telegram-privilege-monitor --version
 
 # Voir les logs
 tail -f /var/log/telegram_wtmp_monitor.log
@@ -152,6 +173,14 @@ systemctl status telegram-wtmp-monitor
 journalctl -u telegram-wtmp-monitor --no-pager
 ```
 
+## 📄 Changelog
+
+### V6.2
+- Ajout de la compatibilité Debian 13 (wtmpdb)
+- Ajout de l'option `--update` pour les mises à jour simplifiées
+- Versioning unifié sur tous les scripts
+- Amélioration des messages de notification avec affichage de la version
+
 ## 📄 Licence
 
 Ce projet est sous licence libre. Utilisez et modifiez selon vos besoins.
@@ -162,7 +191,3 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 - Signaler des bugs
 - Proposer des améliorations
 - Soumettre des pull requests
-
-## 📞 Support
-
-Pour toute question ou problème, ouvrez une issue sur ce repository.

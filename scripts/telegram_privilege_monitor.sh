@@ -1,13 +1,13 @@
 #!/bin/bash
-# Telegram Notification System V6
+# Telegram Notification System V6.2
 
-# telegram_privilege_monitor.sh V1.0
+# telegram_privilege_monitor.sh
 # Daemon de surveillance des élévations de privilèges (su/sudo) via journalctl
-
+# Compatibilité: Debian 12, Debian 13
 
 # Configuration par défaut
 SCRIPT_NAME="telegram_privilege_monitor"
-VERSION="1.0"
+VERSION="6.2"
 CONFIG_DIR="/etc/telegram"
 CREDENTIALS_FILE="$CONFIG_DIR/credentials.cfg"
 CONFIG_FILE="$CONFIG_DIR/telegram_notif.cfg"
@@ -208,6 +208,7 @@ monitor_privileges() {
 🎯 *Utilisateur cible* : \`$target_user\` (UID: $target_uid)
 📅 *Date/Heure* : \`$(date '+%Y-%m-%d %H:%M:%S')\`
 🖥️ *Serveur* : \`$(hostname)\`
+🔧 *Version* : \`$VERSION\`
 
 ───────────────────────────"
                         
@@ -251,6 +252,7 @@ monitor_privileges() {
 ⚙️ *Commande* : \`$command\`
 📅 *Date/Heure* : \`$(date '+%Y-%m-%d %H:%M:%S')\`
 🖥️ *Serveur* : \`$(hostname)\`
+🔧 *Version* : \`$VERSION\`
 
 ───────────────────────────"
                         
@@ -285,6 +287,24 @@ create_pid_file() {
 remove_pid_file() {
     rm -f "$PID_FILE"
     log_info "Fichier PID supprimé"
+}
+
+# Fonction d'aide
+show_help() {
+    cat << EOF
+Usage: $0 {start|stop|restart|status|test}
+
+Telegram Privilege Monitor v$VERSION
+
+Options:
+  start       Démarrer le daemon
+  stop        Arrêter le daemon
+  restart     Redémarrer le daemon
+  status      Afficher le statut
+  test        Tester l'envoi d'une notification
+  --version   Afficher la version
+  --help      Afficher cette aide
+EOF
 }
 
 # Fonction de test
@@ -389,8 +409,16 @@ main() {
             test_function
             ;;
             
+        --version)
+            echo "Telegram Privilege Monitor v$VERSION"
+            ;;
+            
+        --help|help)
+            show_help
+            ;;
+            
         *)
-            echo "Usage: $0 {start|stop|restart|status|test}"
+            echo "Usage: $0 {start|stop|restart|status|test|--version|--help}"
             exit 1
             ;;
     esac
