@@ -156,38 +156,58 @@ get_public_ip() {
 }
 
 # Fonction pour parser une ligne de 'last' (version améliorée)
+# Compatible Debian 12 (util-linux last) et Debian 13 (wtmpdb)
 parse_last_line() {
     local line="$1"
-    
+
     # Forcer locale C pour un format standardisé
     export LC_ALL=C
-    
+
     # Ignorer les lignes vides, headers et reboots
     if [[ -z "$line" || "$line" =~ ^wtmp || "$line" =~ ^$ || "$line" =~ ^reboot || "$line" =~ ^shutdown ]]; then
         return 1
     fi
-    
+
+    # Liste des jours de la semaine pour détecter l'absence de host
+    local days_pattern="^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$"
+
     # Parser avec regex plus robuste
     if [[ "$line" =~ ^([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]+(.+)$ ]]; then
         local user="${BASH_REMATCH[1]}"
-        local terminal="${BASH_REMATCH[2]}"  
+        local terminal="${BASH_REMATCH[2]}"
         local host="${BASH_REMATCH[3]}"
         local rest="${BASH_REMATCH[4]}"
-        
+
         # Filtrer les entrées SSH redondantes pour éviter les notifications en double
         # Les connexions SSH génèrent à la fois une entrée "ssh" et "pts/X"
         # On ne garde que les entrées pts/* qui sont plus informatives
         if [[ "$terminal" == "ssh" ]]; then
             return 1
         fi
-        
+
+        # Debian 13 (wtmpdb) : Détecter si le "host" est en fait le début de la date
+        # Cela arrive pour les connexions console (tty) sans host distant
+        if [[ "$host" =~ $days_pattern ]]; then
+            # Pas de host - c'est une connexion console locale
+            rest="$host $rest"
+            host=""
+        fi
+
         # Extraire la partie date et déterminer le type de connexion
         local datetime
         local is_active=false
-        
-        if [[ "$rest" =~ ^(.+)[[:space:]]+still[[:space:]]+logged[[:space:]]+in ]]; then
-            # Connexion active : traiter
+
+        # Debian 13 (wtmpdb) : Format "DATE - still logged in" avec tiret séparateur
+        if [[ "$rest" =~ ^(.+)[[:space:]]+-[[:space:]]+still[[:space:]]+logged[[:space:]]+in ]]; then
+            # Connexion active avec format wtmpdb
             datetime="${BASH_REMATCH[1]}"
+            is_active=true
+        elif [[ "$rest" =~ ^(.+)[[:space:]]+still[[:space:]]+logged[[:space:]]+in ]]; then
+            # Connexion active format classique (Debian 12)
+            datetime="${BASH_REMATCH[1]}"
+            # Nettoyer le tiret résiduel si présent (compatibilité)
+            datetime="${datetime% -}"
+            datetime="${datetime% }"
             is_active=true
         elif [[ "$rest" =~ ^(.+)[[:space:]]+-[[:space:]]+.* ]]; then
             # Connexion terminée : ignorer complètement les déconnexions
@@ -195,62 +215,78 @@ parse_last_line() {
         else
             # Fallback : prendre tout sauf les parenthèses finales
             datetime=$(echo "$rest" | sed -E 's/[[:space:]]+\([^)]+\)[[:space:]]*$//' | xargs)
-            
+
             # Vérifier si c'est une déconnexion dans le fallback (version améliorée)
             if [[ "$rest" =~ [[:space:]]-[[:space:]] ]] || [[ "$rest" =~ -[[:space:]] ]]; then
                 return 1
             fi
-            
+
             # Si ce n'est pas une déconnexion, c'est une connexion active
             is_active=true
         fi
-        
+
+        # Nettoyer le datetime (supprimer espaces et tirets résiduels)
+        datetime=$(echo "$datetime" | sed -E 's/[[:space:]]+-?[[:space:]]*$//')
+
         # Validation des champs
         if [[ -z "$user" || -z "$terminal" || -z "$datetime" ]]; then
             return 1
         fi
-        
+
         export PARSED_USER="$user"
         export PARSED_TERMINAL="$terminal"
         export PARSED_HOST="$host"
         export PARSED_DATETIME="$datetime"
         export PARSED_IS_ACTIVE="$is_active"
-        
+
         return 0
     fi
-    
+
     return 1
 }
 
-# Fonction pour convertir datetime en timestamp
-datetime_to_timestamp() {
-    local datetime="$1"
-    local timestamp
+# Fonction pour valider la configuration
+validate_configuration() {
+    log_debug "Validation de la configuration..."
     
-    # Forcer locale C pour parsing de date standardisé
-    export LC_ALL=C
-    
-    # Essayer le format standard de last
-    timestamp=$(date -d "$datetime" +%s 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$timestamp" ]; then
-        echo "$timestamp"
-        return 0
+    # Vérifier les variables Telegram essentielles
+    if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+        log_error "Configuration incomplète: BOT_TOKEN ou CHAT_ID manquant"
+        return 1
     fi
     
-    # Essayer avec des formats alternatifs courants
-    for format in "%a %b %d %H:%M:%S %Y" "%Y-%m-%d %H:%M:%S" "%b %d %H:%M"; do
-        timestamp=$(date -d "$datetime" +%s 2>/dev/null)
-        if [ $? -eq 0 ] && [ -n "$timestamp" ]; then
-            log_debug "Date parsée avec format alternatif: $datetime -> $timestamp"
-            echo "$timestamp"
-            return 0
-        fi
-    done
+    # Vérifier la connectivité réseau (optionnel mais recommandé)
+    if ! timeout 5 curl -s --max-time 3 "https://api.telegram.org" >/dev/null 2>&1; then
+        log_error "Impossible de joindre l'API Telegram - vérifiez votre connexion réseau"
+        return 1
+    fi
     
-    # Si tout échoue, logger l'erreur et utiliser une heure récente
-    log_error "Impossible de parser la date: '$datetime' - utilisation timestamp actuel"
-    date +%s
-    return 1
+    log_debug "Configuration validée avec succès"
+    return 0
+}
+
+# Fonction pour créer un hash unique pour une connexion
+create_connection_hash() {
+    local user="$1"
+    local terminal="$2"
+    local host="$3"
+    local datetime="$4"
+    
+    local connection_string="${user}:${terminal}:${host}:${datetime}"
+    
+    # Essayer sha256sum en premier (plus fiable)
+    if command -v sha256sum >/dev/null 2>&1; then
+        echo "$connection_string" | sha256sum | awk '{print $1}'
+    # Fallback sur md5sum
+    elif command -v md5sum >/dev/null 2>&1; then
+        echo "$connection_string" | md5sum | awk '{print $1}'
+    # Fallback sur od (toujours disponible)
+    elif command -v od >/dev/null 2>&1; then
+        echo "$connection_string" | od -An -tx1 | tr -d ' \n'
+    # Dernier recours: hash simple basé sur la longueur et timestamp
+    else
+        echo "${#connection_string}:${datetime}:$$"
+    fi
 }
 
 # Fonction pour créer le message de notification
@@ -260,197 +296,64 @@ create_notification_message() {
     local host="$3"
     local datetime="$4"
     
-    # Utiliser la variable globale pour déterminer si la connexion est active
-    local is_active="${PARSED_IS_ACTIVE:-true}"
-    
-    # Déterminer le type de connexion avec détection améliorée
-    local connection_type="Inconnue"
-    local connection_icon="🔔"
-    
-    if [[ "$terminal" =~ ^pts/ ]]; then
-        # Vérifier si c'est une élévation su en comparant avec les sessions actives
-        if [[ "$host" == "" || "$host" == "-" ]]; then
-            connection_type="Élévation su"
-            connection_icon="🔐"
-        else
-            connection_type="SSH"
-            connection_icon="🔑"
-        fi
-    elif [[ "$terminal" =~ ^tty ]]; then
-        connection_type="Console Proxmox"
-        connection_icon="📺"
-    elif [[ "$terminal" =~ ^: ]]; then
-        connection_type="X11/GUI"
-        connection_icon="💻"
-    fi
-    
-    # Informations système
     local hostname=$(hostname)
-    local local_ip=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "N/A")
+    local local_ip=$(hostname -I | awk '{print $1}')
     local public_ip=$(get_public_ip)
     
-    # Compter les sessions actives et générer la liste détaillée
-    local active_sessions=$(who | wc -l)
-    local sessions_list=""
-    
-    # Générer la liste des sessions actives (comme dans l'ancienne version)
-    if [ "$active_sessions" -gt 0 ] && [ "$active_sessions" -le 10 ]; then
-        sessions_list="
-
-👥 Sessions actives sur la machine :"
-        
-        local who_output=$(who 2>/dev/null)
-        while IFS= read -r session_line; do
-            if [ -n "$session_line" ]; then
-                local session_user=$(echo "$session_line" | awk '{print $1}')
-                local session_terminal=$(echo "$session_line" | awk '{print $2}')
-
-                # Extraire la date et l'heure complètes (colonnes 3, 4 et 5)
-                # Format: 2025-07-08 13:08 (192.168.2.111)
-                local session_time=$(echo "$session_line" | awk '{print $3, $4, $5}')
-                local session_ip=$(echo "$session_line" | grep -o '([^)]*)' | tr -d '()')
-                
-                local type_conn="Autre"
-                if [[ "$session_terminal" == pts/* ]]; then
-                    type_conn="SSH"
-                elif [[ "$session_terminal" == tty* ]]; then
-                    type_conn="Console"
-                fi
-                
-                if [ -n "$session_ip" ]; then
-                    sessions_list="${sessions_list}
-• $type_conn ($session_terminal) depuis $session_ip à $session_time"
-                else
-                    sessions_list="${sessions_list}
-• $type_conn ($session_terminal) à $session_time"
-                fi
-            fi
-        done <<< "$who_output"
-    elif [ "$active_sessions" -gt 10 ]; then
-        sessions_list="
-
-👥 Trop de sessions pour affichage détaillé ($active_sessions)"
-    else
-        sessions_list="
-
-👥 Aucune session active détectée"
+    # Déterminer le type de connexion
+    local connection_type="Connexion"
+    if [[ "$terminal" =~ ^pts/ ]]; then
+        connection_type="SSH"
+    elif [[ "$terminal" =~ ^tty ]]; then
+        connection_type="Console"
     fi
     
-    # Déterminer le titre du message selon le statut
-    local message_title
-    if [ "$is_active" = "true" ]; then
-        message_title="*Nouvelle connexion $connection_type*"
-    else
-        message_title="*Connexion $connection_type récente*"
-    fi
-    
-    # Construire le message avec le nouveau format
-    local message="$connection_icon $message_title
+    # Message formaté
+    cat << EOF
+🔐 *NOUVELLE CONNEXION DÉTECTÉE*
 
-📅 $datetime
-──────────────────────
-Connexion sur la machine :
-👤 Utilisateur: $user
-💻 Hôte: $hostname
-🏠 IP Locale: $local_ip
-──────────────────────
-Connexion depuis :
-📡 IP Source: $host
-🌍 IP Publique: $public_ip
-──────────────────────
-📺 Terminal: $terminal$sessions_list"
-
-    echo "$message"
+📅 Date: $datetime
+───────────────────────────
+👤 Utilisateur: \`$user\`
+🖥️ Terminal: \`$terminal\`
+🌐 Depuis: ${host:-"Console locale"}
+───────────────────────────
+💻 Serveur: \`$hostname\`
+🏠 IP locale: \`$local_ip\`
+🌍 IP publique: \`$public_ip\`
+───────────────────────────
+📊 Type: $connection_type
+EOF
 }
 
-# Fonction de validation de la configuration
-validate_configuration() {
-    log_info "Validation de la configuration..."
-    
-    # Test du format de sortie de last
-    local test_output=$(LC_ALL=C last -F -w -n 5 2>/dev/null)
-    if [ -z "$test_output" ]; then
-        log_error "Impossible d'exécuter la commande 'last'"
-        return 1
-    fi
-    
-    # Test de parsing sur une ligne réelle
-    local test_parsed=0
-    while IFS= read -r line; do
-        if parse_last_line "$line"; then
-            test_parsed=1
-            log_info "Test parsing OK: $PARSED_USER@$PARSED_TERMINAL"
-            break
-        fi
-    done <<< "$test_output"
-    
-    if [ "$test_parsed" -eq 0 ]; then
-        log_error "Aucune ligne de 'last' n'a pu être parsée - vérifiez le format"
-        return 1
-    fi
-    
-    # Test de conversion timestamp
-    local test_timestamp=$(datetime_to_timestamp "$PARSED_DATETIME")
-    if [ $? -ne 0 ]; then
-        log_error "Problème de conversion timestamp"
-        return 1
-    fi
-    
-    log_info "Configuration validée avec succès"
-    return 0
-}
-
-# Fonction principale de surveillance
+# Fonction principale de monitoring WTMP
 monitor_wtmp() {
-    log_info "Démarrage surveillance WTMP (intervalle: ${CHECK_INTERVAL}s)"
+    log_info "Démarrage de la surveillance WTMP"
     
-    # Créer le répertoire de données si nécessaire
-    mkdir -p "$(dirname "$LAST_CHECK_FILE")"
+    # Créer le répertoire de stockage de l'état
+    local state_dir="/var/lib/${SCRIPT_NAME}"
+    mkdir -p "$state_dir"
     
-    # Fichier pour stocker les connexions déjà vues
-    local seen_connections_file="/var/lib/${SCRIPT_NAME}/seen_connections"
-    mkdir -p "$(dirname "$seen_connections_file")"
+    # Fichier pour tracker les connexions déjà vues
+    local seen_connections_file="${state_dir}/seen_connections"
+    touch "$seen_connections_file"
     
+    # Boucle principale de surveillance
     while true; do
-        local current_time=$(date +%s)
+        local since_time=$(date -d "1 minute ago" "+%Y-%m-%d %H:%M")
         local new_connections=0
         
-        # Utiliser last avec limite de temps plutôt que de lignes
-        # -s pour depuis (since) la dernière heure pour capturer toutes les connexions récentes
-        local since_time=$(date -d "1 hour ago" "+%Y-%m-%d %H:%M")
-        
-        # Lire les connexions récentes avec format fixe
-        # CORRECTION BUG CRITIQUE: Utiliser redirection de processus au lieu de pipe
-        # pour éviter le sous-shell qui empêche les variables de remonter
+        # Parser les connexions récentes
         while IFS= read -r line; do
             if parse_last_line "$line"; then
-                # Créer un ID unique pour cette connexion
-                local connection_id="${PARSED_USER}:${PARSED_TERMINAL}:${PARSED_HOST}:${PARSED_DATETIME}"
-                
-                # Créer un hash avec fallback si sha256sum n'est pas disponible
-                local connection_hash
-                if command -v sha256sum >/dev/null 2>&1; then
-                    connection_hash=$(echo "$connection_id" | sha256sum | cut -d' ' -f1)
-                elif command -v md5sum >/dev/null 2>&1; then
-                    connection_hash=$(echo "$connection_id" | md5sum | cut -d' ' -f1)
-                else
-                    # Fallback simple : utiliser un hash basique avec date/PID
-                    connection_hash=$(echo "$connection_id" | od -An -tx1 | tr -d ' \n' | head -c 32)
-                    # Si od échoue aussi, utiliser un ID basé sur timestamp et PID
-                    if [ -z "$connection_hash" ]; then
-                        connection_hash="${current_time}_$$_$(echo "$connection_id" | wc -c)"
-                    fi
-                fi
-                
-                # Vérifier si cette connexion a déjà été traitée
-                if ! grep -q "$connection_hash" "$seen_connections_file" 2>/dev/null; then
-                    local login_timestamp=$(datetime_to_timestamp "$PARSED_DATETIME")
+                # Vérifier si c'est une connexion active
+                if [ "$PARSED_IS_ACTIVE" = true ]; then
+                    # Créer un hash unique pour cette connexion
+                    local connection_hash=$(create_connection_hash "$PARSED_USER" "$PARSED_TERMINAL" "$PARSED_HOST" "$PARSED_DATETIME")
                     
-                    # Vérifier si c'est vraiment récent (dernières 2 heures)
-                    local min_timestamp=$((current_time - 7200))
-                    
-                    if [ "$login_timestamp" -gt "$min_timestamp" ]; then
-                        log_info "Nouvelle connexion: $PARSED_USER@$PARSED_TERMINAL depuis $PARSED_HOST à $PARSED_DATETIME"
+                    # Vérifier si on a déjà notifié cette connexion
+                    if ! grep -q "^${connection_hash}$" "$seen_connections_file" 2>/dev/null; then
+                        log_debug "Nouvelle connexion détectée: $PARSED_USER@$PARSED_TERMINAL depuis $PARSED_HOST"
                         
                         # Créer et envoyer la notification
                         local message=$(create_notification_message "$PARSED_USER" "$PARSED_TERMINAL" "$PARSED_HOST" "$PARSED_DATETIME")
