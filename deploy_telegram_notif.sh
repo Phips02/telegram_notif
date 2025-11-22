@@ -179,8 +179,22 @@ echo "2. Obtenez votre CHAT_ID en envoyant un message au bot puis en consultant 
 echo "   https://api.telegram.org/bot<VOTRE_TOKEN>/getUpdates"
 echo ""
 
-read -p "🤖 Entrez votre BOT_TOKEN : " BOT_TOKEN < /dev/tty
-read -p "💬 Entrez votre CHAT_ID : " CHAT_ID < /dev/tty
+# Vérifier si on peut accéder au terminal pour la saisie interactive
+if [[ ! -e /dev/tty ]]; then
+    echo "❌ Impossible d'accéder au terminal pour la saisie interactive"
+    echo "   Téléchargez et exécutez le script manuellement :"
+    echo "   wget $GITHUB_REPO/deploy_telegram_notif.sh && chmod +x deploy_telegram_notif.sh && ./deploy_telegram_notif.sh"
+    exit 1
+fi
+
+# Ouvrir /dev/tty sur un descripteur séparé pour la lecture interactive
+exec 3</dev/tty
+
+read -p "🤖 Entrez votre BOT_TOKEN : " BOT_TOKEN <&3
+read -p "💬 Entrez votre CHAT_ID : " CHAT_ID <&3
+
+# Fermer le descripteur
+exec 3<&-
 
 # Validation basique des inputs
 if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
