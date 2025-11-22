@@ -179,8 +179,8 @@ echo "2. Obtenez votre CHAT_ID en envoyant un message au bot puis en consultant 
 echo "   https://api.telegram.org/bot<VOTRE_TOKEN>/getUpdates"
 echo ""
 
-read -p "🤖 Entrez votre BOT_TOKEN : " BOT_TOKEN
-read -p "💬 Entrez votre CHAT_ID : " CHAT_ID
+read -p "🤖 Entrez votre BOT_TOKEN : " BOT_TOKEN < /dev/tty
+read -p "💬 Entrez votre CHAT_ID : " CHAT_ID < /dev/tty
 
 # Validation basique des inputs
 if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
